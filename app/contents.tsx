@@ -2,8 +2,8 @@ import { useState, useCallback, useRef } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet, Animated, useWindowDimensions } from 'react-native';
 import { RipplePressable } from '@/components/RipplePressable';
 import { StatusBar } from 'expo-status-bar';
-import { BackIcon, HomeIcon, PlusIcon, MinusIcon } from '@/components/Icons';
-import { TertiaryButton } from '@/components/TertiaryButton';
+import { PlusIcon, MinusIcon } from '@/components/Icons';
+import { NavBar } from '@/components/NavBar';
 import { BookSectionHeading } from '@/components/BookSectionHeading';
 import { AppScrollView } from '@/components/AppScrollView';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,6 +11,8 @@ import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { toTitleCase } from '@/utils/text';
 import { useTheme, useThemeColors } from '@/utils/theme';
 import { UIFonts } from '@/constants/Typography';
+import { Colors } from '@/constants/Colors';
+import { Spacing, BorderWidth } from '@/constants/Tokens';
 
 const INDEX_FILES = {
   theory:     require('@/assets/content/theory-index.json'),
@@ -139,19 +141,11 @@ export default function ContentsScreen() {
     <SafeAreaView style={[styles.topArea, { backgroundColor: t.darkerBackgroundColor }]} edges={['top']}>
       <SafeAreaView style={[styles.container, { backgroundColor: t.backgroundColor }]} edges={['bottom']}>
         <StatusBar style={isDark ? 'light' : 'dark'} backgroundColor={t.darkerBackgroundColor} />
-        <View style={[styles.navBar, { backgroundColor: t.darkerBackgroundColor }]}>
-          <View style={styles.navRow}>
-            <View style={styles.navLeft}>
-              <TertiaryButton hitSize={40} onPress={() => router.back()}>
-                {(pressed) => <BackIcon size={16} color={pressed ? t.pressedIconColor : t.fontColorPrimary} />}
-              </TertiaryButton>
-              <Text style={[styles.navTitle, { color: t.fontColorPrimary }]}>{toTitleCase(bookTitle)}</Text>
-            </View>
-            <TertiaryButton hitSize={40} onPress={() => setTimeout(() => router.navigate('/home'), 100)}>
-              {(pressed) => <HomeIcon size={16} color={pressed ? t.pressedIconColor : t.fontColorPrimary} />}
-            </TertiaryButton>
-          </View>
-        </View>
+        <NavBar
+          title={toTitleCase(bookTitle)}
+          onBack={() => router.back()}
+          onHome={() => setTimeout(() => router.navigate('/home'), 100)}
+        />
 
         <AppScrollView
           ref={scrollRef}
@@ -200,7 +194,7 @@ export default function ContentsScreen() {
                       onPress={() => { if (navigating) return; setNavigating(true); startLoadBar(); const anchor = childIndex === 0 && child.bookId === 'theory' ? item.id : (child.anchor ?? child.id); setTimeout(() => router.push(`/reader?book=${child.bookId}&anchor=${anchor}`), 200); }}
                     >
                       <>
-                        <View style={[styles.itemRow, styles.accordionChildRow, { paddingLeft: 24 + getChildIndentLevel(child.id) * 24 }]}>
+                        <View style={[styles.itemRow, styles.accordionChildRow, { paddingLeft: Spacing[24] + getChildIndentLevel(child.id) * 24 }]}>
                           <View style={styles.itemText}>
                             <Text style={[styles.itemLabel, { color: t.fontColorPrimary }]}>{child.label}</Text>
                             {child.subtitle && (
@@ -241,7 +235,7 @@ export default function ContentsScreen() {
           })}
         </AppScrollView>
         {loadBarVisible && (
-          <View style={[styles.loadBarTrack, { backgroundColor: isDark ? 'transparent' : t.darkOutline }]}>
+          <View style={[styles.loadBarTrack, { backgroundColor: isDark ? Colors.transparent : t.darkOutline }]}>
             <Animated.View style={[
               styles.loadBarFill,
               { backgroundColor: isDark ? t.darkerBackgroundColor : t.fontColorPrimary },
@@ -261,74 +255,51 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  navBar: {
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-  },
-  navRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  navLeft: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  navTitle: {
-    flex: 1,
-    fontFamily: UIFonts.bodySRegular.fontFamily,
-    fontSize: UIFonts.bodySRegular.fontSize,
-  },
   scrollView: {
     flex: 1,
   },
   content: {
-    paddingBottom: 40,
+    paddingBottom: Spacing[40],
   },
   item: {
     overflow: 'hidden',
-    paddingLeft: 24,
-    paddingRight: 24,
-    paddingTop: 14,
-    gap: 14,
+    paddingLeft: Spacing[24],
+    paddingRight: Spacing[24],
+    paddingTop: Spacing[12],
+    gap: Spacing[12],
   },
   itemRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: Spacing[12],
   },
   divider: {
-    height: 2,
+    height: BorderWidth.sm,
   },
   itemText: {
     flex: 1,
-    gap: 2,
+    gap: Spacing[2],
   },
   itemLabel: {
-    fontFamily: 'NotoSans_500Medium',
-    fontSize: 14,
+    ...UIFonts.bodyXsRegular,
   },
   itemLabelBold: {
-    fontFamily: 'NotoSans_700Bold',
-    fontSize: 14,
+    ...UIFonts.bodyXsSemibold,
   },
   accordionChildRow: {
-    paddingLeft: 24,
+    paddingLeft: Spacing[24],
   },
   itemSubtitle: {
-    fontFamily: 'NotoSans_500Medium',
-    fontSize: 12,
+    ...UIFonts.body2xsRegular,
   },
   loadBarTrack: {
-    height: 3,
+    height: BorderWidth.lg,
     overflow: 'hidden',
   },
   loadBarFill: {
     position: 'absolute',
     left: 0,
     right: 0,
-    height: 3,
+    height: BorderWidth.lg,
   },
 });

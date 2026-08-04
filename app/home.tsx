@@ -4,11 +4,14 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { router, useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Colors } from '@/constants/Colors';
-import { TheoryIcon, ExercizesIcon, TeacherIcon, SupplementalIcon, TipSolidIcon, LightModeIcon, DarkModeIcon, SearchIcon, BookmarkIcon, NotesIcon } from '@/components/Icons';
-import { TertiaryButton } from '@/components/TertiaryButton';
+import { Radius, BorderWidth, Spacing } from '@/constants/Tokens';
+import { UIFonts } from '@/constants/Typography';
+import { TheoryIcon, ExercizesIcon, TeacherIcon, SupplementalIcon, TipLightIcon, LightModeIcon, DarkModeIcon, SearchIcon, BookmarkIcon } from '@/components/Icons';
 import { HeroLogo } from '@/components/HeroLogo';
+import { Button } from '@/components/ui/button';
+import { IconButton } from '@/components/ui/icon-button';
+import { Text as ButtonText } from '@/components/ui/text';
 import { loadLastRead, clearLastRead, LastReadState } from '@/utils/lastRead';
-import { RipplePressable } from '@/components/RipplePressable';
 import { useTheme } from '@/utils/theme';
 import { useBookmarks } from '@/utils/bookmarks';
 
@@ -35,25 +38,15 @@ export default function HomeScreen() {
   }, [isDark, heroFadeAnim]);
 
   const t = isDark ? {
-    pageBg:          Colors.backgroundColorDark,
-    topBarBg:        Colors.backgroundColorDark,
-    topBarIconColor: Colors.fontColorSecondary,
-    topBarRipple:    Colors.primaryButtonBgDark,
-    btnBg:           Colors.backgroundColorDark,
-    btnBorder:       Colors.darkOutline,
-    btnIconColor:    Colors.fontColorSecondary,
-    btnLabelColor:   Colors.fontColorSecondary,
-    btnRipple:       Colors.primaryButtonBgDark,
+    pageBg:          Colors.dark100,
+    topBarBg:        Colors.dark100,
+    btnIconColor:    Colors.brand100,
+    highlightedOverlay: Colors.imageScrim40,
   } : {
-    pageBg:          Colors.backgroundColor,
-    topBarBg:        Colors.backgroundColor,
-    topBarIconColor: Colors.fontColorPrimary,
-    topBarRipple:    Colors.darkerBackgroundColor,
-    btnBg:           Colors.primaryButtonBg,
-    btnBorder:       Colors.darkOutline,
-    btnIconColor:    Colors.fontColorPrimary,
-    btnLabelColor:   Colors.fontColorPrimary,
-    btnRipple:       Colors.primaryButtonPressed,
+    pageBg:          Colors.brand100,
+    topBarBg:        Colors.brand100,
+    btnIconColor:    Colors.ink100,
+    highlightedOverlay: Colors.imageScrim35,
   };
   const { clearAllBookmarks } = useBookmarks();
   const [lastRead, setLastRead] = useState<LastReadState | null>(null);
@@ -103,21 +96,14 @@ export default function HomeScreen() {
 
       {/* Top bar (donation/tip + light/dark toggle) hidden — may be restored later
       <View style={[styles.topBar, { backgroundColor: t.topBarBg }]}>
-        <TertiaryButton hitSize={40} rippleColor={t.topBarRipple} onPress={async () => { await clearLastRead(); setLastRead(null); }}>
-          {(pressed) => <TipSolidIcon size={24} color={pressed ? (isDark ? Colors.fontColorWhite : Colors.fontColorPrimary) : t.topBarIconColor} />}
-        </TertiaryButton>
-        <TertiaryButton hitSize={40} rippleColor={t.topBarRipple} onPress={toggleTheme}>
-          {(pressed) => isDark
-            ? <LightModeIcon size={20} color={pressed ? Colors.fontColorWhite : t.topBarIconColor} />
-            : <DarkModeIcon size={20} color={pressed ? Colors.fontColorPrimary : t.topBarIconColor} />
-          }
-        </TertiaryButton>
+        <IconButton icon={TipLightIcon} surface="transparent" onPress={async () => { await clearLastRead(); setLastRead(null); }} />
+        <IconButton icon={isDark ? LightModeIcon : DarkModeIcon} surface="transparent" onPress={toggleTheme} />
       </View>
       */}
 
       <ScrollView contentContainerStyle={styles.content}>
         {/* Hero card */}
-        <View style={[styles.heroCard, { borderColor: isDark ? Colors.darkOutline : 'transparent' }]}>
+        <View style={[styles.heroCard, { borderColor: isDark ? Colors.brand400 : Colors.transparent }]}>
           <Image
             source={heroSourceLight}
             style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]}
@@ -131,18 +117,11 @@ export default function HomeScreen() {
           <View style={[StyleSheet.absoluteFill, styles.heroOverlay]} />
 
           <View style={styles.heroTipButton}>
-            <TertiaryButton hitSize={40} rippleColor={t.topBarRipple} onPress={handleResetAll}>
-              {(pressed) => <TipSolidIcon size={24} color={pressed ? (isDark ? Colors.fontColorWhite : Colors.fontColorPrimary) : Colors.fontColorWhite} />}
-            </TertiaryButton>
+            <IconButton icon={TipLightIcon} surface="transparent" onPress={handleResetAll} />
           </View>
 
           <View style={styles.heroThemeToggle}>
-            <TertiaryButton hitSize={40} rippleColor={t.topBarRipple} onPress={toggleTheme}>
-              {(pressed) => isDark
-                ? <LightModeIcon size={20} color={pressed ? Colors.fontColorWhite : t.topBarIconColor} />
-                : <DarkModeIcon size={20} color={pressed ? Colors.fontColorPrimary : Colors.fontColorSecondary} />
-              }
-            </TertiaryButton>
+            <IconButton icon={isDark ? LightModeIcon : DarkModeIcon} surface="transparent" onPress={toggleTheme} />
           </View>
 
           <View style={styles.heroContent}>
@@ -152,28 +131,19 @@ export default function HomeScreen() {
             </View>
 
             {/* Highlighted item — continue reading / welcome */}
-            <View style={styles.highlighted}>
+            <View style={[styles.highlighted, { backgroundColor: t.highlightedOverlay }]}>
               <View style={styles.highlightPlaceholders}>
-                <TertiaryButton hitSize={40} rippleColor={t.topBarRipple} onPress={() => router.push('/search')}>
-                  {(pressed) => <SearchIcon size={20} color={pressed ? (isDark ? Colors.fontColorWhite : Colors.fontColorPrimary) : Colors.fontColorSecondary} />}
-                </TertiaryButton>
-                <TertiaryButton hitSize={40} rippleColor={t.topBarRipple} onPress={() => router.push('/bookmarks')}>
-                  {(pressed) => <BookmarkIcon size={20} color={pressed ? (isDark ? Colors.fontColorWhite : Colors.fontColorPrimary) : Colors.fontColorSecondary} />}
-                </TertiaryButton>
-                {/* Notes icon hidden — may be restored later
-                <TertiaryButton hitSize={40} rippleColor={t.topBarRipple} onPress={() => {}}>
-                  {(pressed) => <NotesIcon size={20} color={pressed ? (isDark ? Colors.fontColorWhite : Colors.fontColorPrimary) : Colors.fontColorSecondary} />}
-                </TertiaryButton>
-                */}
+                <IconButton icon={SearchIcon} surface="transparent" onPress={() => router.push('/search')} />
+                <IconButton icon={BookmarkIcon} surface="transparent" onPress={() => router.push('/bookmarks')} />
               </View>
               <View style={styles.highlightMeta}>
                 <Text style={styles.highlightLabel}>{lastRead ? 'Continúa leyendo' : 'Te damos la bienvenida:'}</Text>
                 {lastRead && <Text style={styles.highlightChapter}>{lastRead.breadcrumb}</Text>}
               </View>
               {lastRead && <Text style={styles.highlightQuote}>{lastRead.title}</Text>}
-              <RipplePressable
-                style={({ pressed }) => [styles.sigueBtn, pressed && styles.sigueBtnPressed]}
-                rippleColor={t.btnRipple}
+              <Button
+                variant="mainHero"
+                style={{ marginTop: Spacing[20] }}
                 onPress={() => {
                   if (navigating) return;
                   setNavigating(true);
@@ -186,12 +156,8 @@ export default function HomeScreen() {
                   , 200);
                 }}
               >
-                {({ pressed }) => (
-                  <Text style={[styles.sigueBtnText, pressed && !isDark && { color: Colors.fontColorPrimary }]}>
-                    {lastRead ? 'Sigue leyendo' : 'Comienza el Curso'}
-                  </Text>
-                )}
-              </RipplePressable>
+                <ButtonText>{lastRead ? 'Sigue leyendo' : 'Comienza el Curso'}</ButtonText>
+              </Button>
             </View>
           </View>
         </View>
@@ -199,25 +165,22 @@ export default function HomeScreen() {
         {/* Primary buttons */}
         <View style={styles.buttons}>
           {BUTTONS.map(({ Icon, label, anchor }, i) => (
-            <RipplePressable
+            <Button
               key={i}
-              style={({ pressed }) => [styles.primaryBtn, { backgroundColor: t.btnBg, borderColor: t.btnBorder }]}
-              rippleColor={t.btnRipple}
+              variant="mainHome"
               onPress={() => { if (navigating) return; setNavigating(true); startLoadBar(); setTimeout(() => router.push(`/contents?anchor=${anchor}`), 200); }}
             >
-              <View style={styles.primaryBtnIcon}>
-                <Icon size={16} color={t.btnIconColor} />
-              </View>
-              <Text style={[styles.primaryBtnLabel, { color: t.btnLabelColor }]}>{label}</Text>
-            </RipplePressable>
+              <Icon size={16} color={t.btnIconColor} />
+              <ButtonText>{label}</ButtonText>
+            </Button>
           ))}
         </View>
       </ScrollView>
       {loadBarVisible && (
-        <View style={[styles.loadBarTrack, { bottom: bottomInset, backgroundColor: isDark ? 'transparent' : Colors.darkOutline }]}>
+        <View style={[styles.loadBarTrack, { bottom: bottomInset, backgroundColor: isDark ? Colors.transparent : Colors.brand400 }]}>
           <Animated.View style={[
             styles.loadBarFill,
-            { backgroundColor: isDark ? Colors.primaryButtonBgDark : Colors.fontColorPrimary },
+            { backgroundColor: isDark ? Colors.gold100 : Colors.ink100 },
             { transform: [{ translateX: loadBarAnim.interpolate({ inputRange: [0, 1], outputRange: [-screenWidth, 0] }) }] },
           ]} />
         </View>
@@ -232,8 +195,8 @@ const styles = StyleSheet.create({
   },
 
   topBar: {
-    paddingHorizontal: 24,
-    paddingVertical: 4,
+    paddingHorizontal: Spacing[24],
+    paddingVertical: Spacing[4],
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -241,33 +204,37 @@ const styles = StyleSheet.create({
 
   content: {
     flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingTop: 0,
-    paddingBottom: 20,
+    paddingHorizontal: Spacing[24],
+    paddingTop: Spacing.none,
+    paddingBottom: Spacing[20],
   },
 
   // Hero card
   heroCard: {
     flex: 1,
-    borderRadius: 12,
-    borderWidth: 2,
+    borderRadius: Radius.lg,
+    borderWidth: BorderWidth.sm,
     overflow: 'hidden',
-    marginBottom: 16,
+    marginBottom: Spacing[12],
   },
   heroOverlay: {
-    backgroundColor: 'rgba(0,0,0,0.20)',
+    backgroundColor: Colors.imageScrim20,
   },
   heroTipButton: {
     position: 'absolute',
     top: 0,
     left: 0,
     zIndex: 1,
+    paddingTop: Spacing[10],
+    paddingLeft: Spacing[10],
   },
   heroThemeToggle: {
     position: 'absolute',
     top: 0,
     right: 0,
     zIndex: 1,
+    paddingTop: Spacing[10],
+    paddingRight: Spacing[10],
   },
   heroContent: {
     flex: 1,
@@ -280,96 +247,56 @@ const styles = StyleSheet.create({
     minHeight: 220,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 18,
+    gap: Spacing[16],
   },
   // Highlighted item
   highlighted: {
     position: 'relative',
-    backgroundColor: 'rgba(0,0,0,0.30)',
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 20,
+    paddingHorizontal: Spacing[20],
+    paddingTop: Spacing[16],
+    paddingBottom: Spacing[20],
   },
   highlightPlaceholders: {
     position: 'absolute',
     top: 0,
     right: 0,
     flexDirection: 'row',
-    gap: 0,
+    gap: Spacing[8],
     zIndex: 1,
-    paddingTop: 2,
-    paddingRight: 2,
+    paddingTop: Spacing[10],
+    paddingRight: Spacing[10],
   },
   highlightMeta: {
-    gap: 8,
+    gap: Spacing[8],
   },
   highlightLabel: {
-    fontFamily: 'NotoSans_500Medium',
-    fontSize: 12,
-    color: Colors.fontColorSecondary,
+    ...UIFonts.body2xsRegular,
+    color: Colors.brand100,
   },
   highlightChapter: {
-    fontFamily: 'NotoSans_700Bold',
-    fontSize: 12,
-    color: Colors.fontColorSecondary,
+    ...UIFonts.body2xsSemibold,
+    color: Colors.brand100,
   },
   highlightQuote: {
-    fontFamily: 'NotoSans_500Medium',
-    fontSize: 16,
-    color: Colors.fontColorSecondary,
-    marginTop: 16,
+    ...UIFonts.bodyXsMedium,
+    color: Colors.brand100,
+    marginTop: Spacing[16],
   },
-  sigueBtn: {
-    marginTop: 20,
-    overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: Colors.backgroundColor,
-    borderRadius: 12,
-    paddingVertical: 8,
-    alignItems: 'center',
-  },
-  sigueBtnPressed: {},
-  sigueBtnText: {
-    fontFamily: 'NotoSans_500Medium',
-    fontSize: 14,
-    color: Colors.fontColorSecondary,
-  },
-
   // Primary buttons
   buttons: {
-    gap: 12,
-  },
-  primaryBtn: {
-    overflow: 'hidden',
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 12,
-    borderWidth: 2,
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    gap: 24,
-  },
-  primaryBtnIcon: {
-    width: 16,
-    height: 16,
-    flexShrink: 0,
+    gap: Spacing[12],
   },
   loadBarTrack: {
     position: 'absolute',
     left: 0,
     right: 0,
-    height: 3,
+    height: BorderWidth.lg,
     overflow: 'hidden',
   },
   loadBarFill: {
     position: 'absolute',
     left: 0,
     right: 0,
-    height: 3,
-  },
-  primaryBtnLabel: {
-    flex: 1,
-    fontFamily: 'NotoSans_500Medium',
-    fontSize: 16,
+    height: BorderWidth.lg,
   },
 });

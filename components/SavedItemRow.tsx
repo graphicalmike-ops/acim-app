@@ -7,6 +7,7 @@ import { useThemeColors } from '@/utils/theme';
 import { useBookmarks, SavedBookmark } from '@/utils/bookmarks';
 import { getVersesText } from '@/utils/content';
 import { UIFonts } from '@/constants/Typography';
+import { Spacing } from '@/constants/Tokens';
 
 const MONTHS_ES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 
@@ -80,8 +81,8 @@ export function SavedItemRow({ item, onPress }: Props) {
 const styles = StyleSheet.create({
   item: {
     overflow: 'hidden',
-    paddingLeft: 24,
-    paddingRight: 24,
+    paddingLeft: Spacing[24],
+    paddingRight: Spacing[24],
     paddingTop: 14,
     gap: 14,
   },
@@ -95,18 +96,18 @@ const styles = StyleSheet.create({
   },
   itemText: {
     flex: 1,
-    gap: 2,
+    gap: Spacing[2],
   },
   itemHeader: {
-    gap: 2,
+    gap: Spacing[2],
   },
   itemLabel: {
-    fontFamily: 'NotoSans_500Medium',
-    fontSize: 14,
+    fontFamily: UIFonts.bodyXsRegular.fontFamily,
+    fontSize: UIFonts.bodyXsRegular.fontSize,
   },
   itemSubtitle: {
-    fontFamily: 'NotoSans_500Medium',
-    fontSize: 12,
+    fontFamily: UIFonts.body2xsRegular.fontFamily,
+    fontSize: UIFonts.body2xsRegular.fontSize,
   },
   itemDate: {
     fontFamily: UIFonts.body3xsRegular.fontFamily,

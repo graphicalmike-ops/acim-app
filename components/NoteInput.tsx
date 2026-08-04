@@ -2,6 +2,7 @@ import { TextInput, View, StyleSheet } from 'react-native';
 import { Colors } from '@/constants/Colors';
 import { PlusIcon } from '@/components/Icons';
 import { RipplePressable } from '@/components/RipplePressable';
+import { Radius, BorderWidth, Spacing } from '@/constants/Tokens';
 
 type Props = {
   value: string;
@@ -14,14 +15,14 @@ type Props = {
 // Box is always white regardless of theme, same rationale as SearchBar.
 export function NoteInput({ value, onChangeText, onSubmit, placeholder = 'Ingresa una nota', autoFocus }: Props) {
   return (
-    <View style={[styles.container, { backgroundColor: Colors.primaryButtonBg, borderColor: Colors.darkOutline }]}>
+    <View style={[styles.container, { backgroundColor: Colors.neutral100, borderColor: Colors.brand400 }]}>
       <TextInput
-        style={[styles.input, { color: Colors.fontColorPrimary }]}
+        style={[styles.input, { color: Colors.ink100 }]}
         value={value}
         onChangeText={onChangeText}
         onSubmitEditing={onSubmit}
         placeholder={placeholder}
-        placeholderTextColor={Colors.fontColorGray}
+        placeholderTextColor={Colors.ink200}
         autoFocus={autoFocus}
         returnKeyType="done"
         multiline
@@ -37,7 +38,7 @@ export function NoteInput({ value, onChangeText, onSubmit, placeholder = 'Ingres
           rippleColor={Colors.primaryButtonPressed}
           onPress={onSubmit}
         >
-          {({ pressed }) => <PlusIcon size={32} glyphSize={16} color={pressed ? Colors.fontColorGray : Colors.fontColorPrimary} />}
+          {({ pressed }) => <PlusIcon size={32} glyphSize={16} color={pressed ? Colors.ink200 : Colors.ink100} />}
         </RipplePressable>
       )}
     </View>
@@ -49,18 +50,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    borderWidth: 2,
-    borderRadius: 12,
-    paddingLeft: 12,
-    paddingRight: 10,
-    paddingVertical: 10,
-    gap: 24,
+    borderWidth: BorderWidth.md,
+    borderRadius: Radius.lg,
+    paddingLeft: Spacing[12],
+    paddingRight: Spacing[10],
+    paddingVertical: Spacing[10],
+    gap: Spacing[24],
   },
   input: {
     flex: 1,
     fontFamily: 'NotoSans_500Medium',
     fontSize: 16,
-    padding: 0,
+    padding: Spacing.none,
     minHeight: 32,
   },
   iconWrap: {

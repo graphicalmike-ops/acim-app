@@ -11,10 +11,11 @@ import {
   View,
 } from 'react-native';
 import { Colors } from '@/constants/Colors';
+import { BorderWidth } from '@/constants/Tokens';
 import { useTheme } from '@/utils/theme';
 
 // Matches the load bar's filled element: same thickness, same fill colors.
-const THUMB_THICKNESS = 3;
+const THUMB_THICKNESS = BorderWidth.lg;
 // Touch target is wider than the visible thumb so it's easy to grab.
 const THUMB_HIT_WIDTH = 16;
 const MIN_THUMB_LENGTH = 32;
@@ -147,7 +148,7 @@ export const AppScrollView = forwardRef<ScrollView, Props>(function AppScrollVie
               styles.thumb,
               {
                 height: thumbLength,
-                backgroundColor: isDark ? Colors.primaryButtonBgDark : Colors.fontColorPrimary,
+                backgroundColor: isDark ? Colors.gold100 : Colors.ink100,
                 opacity: thumbOpacity,
                 transform: [{ translateY: thumbTranslateY }],
               },

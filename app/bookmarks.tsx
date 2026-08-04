@@ -1,15 +1,15 @@
 import { useState, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, useWindowDimensions } from 'react-native';
+import { View, StyleSheet, Animated, useWindowDimensions } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
-import { BackIcon } from '@/components/Icons';
 import { SavedItemRow } from '@/components/SavedItemRow';
 import { AppScrollView } from '@/components/AppScrollView';
-import { TertiaryButton } from '@/components/TertiaryButton';
+import { NavBar } from '@/components/NavBar';
 import { useTheme, useThemeColors } from '@/utils/theme';
 import { useBookmarks, bookmarkHref } from '@/utils/bookmarks';
-import { UIFonts } from '@/constants/Typography';
+import { Colors } from '@/constants/Colors';
+import { Spacing, BorderWidth } from '@/constants/Tokens';
 
 export default function BookmarksScreen() {
   const { isDark } = useTheme();
@@ -42,16 +42,7 @@ export default function BookmarksScreen() {
     <SafeAreaView style={[styles.topArea, { backgroundColor: t.darkerBackgroundColor }]} edges={['top']}>
       <SafeAreaView style={[styles.container, { backgroundColor: t.backgroundColor }]} edges={['bottom']}>
         <StatusBar style={isDark ? 'light' : 'dark'} backgroundColor={t.darkerBackgroundColor} />
-        <View style={[styles.navBar, { backgroundColor: t.darkerBackgroundColor }]}>
-          <View style={styles.navRow}>
-            <View style={styles.navLeft}>
-              <TertiaryButton hitSize={40} onPress={() => router.back()}>
-                {(pressed) => <BackIcon size={16} color={pressed ? t.pressedIconColor : t.fontColorPrimary} />}
-              </TertiaryButton>
-              <Text style={[styles.navTitle, { color: t.fontColorPrimary }]}>Guardados</Text>
-            </View>
-          </View>
-        </View>
+        <NavBar title="Guardados" onBack={() => router.back()} />
 
         <AppScrollView
           contentContainerStyle={styles.content}
@@ -71,7 +62,7 @@ export default function BookmarksScreen() {
           ))}
         </AppScrollView>
         {loadBarVisible && (
-          <View style={[styles.loadBarTrack, { backgroundColor: isDark ? 'transparent' : t.darkOutline }]}>
+          <View style={[styles.loadBarTrack, { backgroundColor: isDark ? Colors.transparent : t.darkOutline }]}>
             <Animated.View style={[
               styles.loadBarFill,
               { backgroundColor: isDark ? t.darkerBackgroundColor : t.fontColorPrimary },
@@ -91,40 +82,20 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  navBar: {
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-  },
-  navRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  navLeft: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  navTitle: {
-    flex: 1,
-    fontFamily: UIFonts.bodySRegular.fontFamily,
-    fontSize: UIFonts.bodySRegular.fontSize,
-  },
   scrollView: {
     flex: 1,
   },
   content: {
-    paddingBottom: 40,
+    paddingBottom: Spacing[40],
   },
   loadBarTrack: {
-    height: 3,
+    height: BorderWidth.lg,
     overflow: 'hidden',
   },
   loadBarFill: {
     position: 'absolute',
     left: 0,
     right: 0,
-    height: 3,
+    height: BorderWidth.lg,
   },
 });

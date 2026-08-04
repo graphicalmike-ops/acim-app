@@ -50,28 +50,28 @@ export function useTheme() {
 }
 
 const LIGHT_COLORS = {
-  backgroundColor: Colors.backgroundColor,
-  darkerBackgroundColor: Colors.darkerBackgroundColor,
-  fontColorPrimary: Colors.fontColorPrimary,
-  fontColorGray: Colors.fontColorGray,
-  darkOutline: Colors.darkOutline,
-  primaryButtonBg: Colors.primaryButtonBg,
+  backgroundColor: Colors.brand100,
+  darkerBackgroundColor: Colors.brand100,
+  fontColorPrimary: Colors.ink100,
+  fontColorGray: Colors.ink200,
+  darkOutline: Colors.brand400,
+  primaryButtonBg: Colors.neutral100,
   overlay: Colors.overlay,
   ntWordColor: Colors.textHighlight,
-  pressedIconColor: Colors.fontColorPrimary,
+  pressedIconColor: Colors.ink100,
   savedHighlight: Colors.savedHighlight,
 };
 
 const DARK_COLORS = {
-  backgroundColor: Colors.backgroundColorDark,
-  darkerBackgroundColor: Colors.primaryButtonBgDark,
-  fontColorPrimary: Colors.fontColorWhite,
-  fontColorGray: Colors.fontColorSecondary,
-  darkOutline: Colors.darkOutline,
-  primaryButtonBg: Colors.primaryButtonBg,
+  backgroundColor: Colors.dark100,
+  darkerBackgroundColor: Colors.dark100,
+  fontColorPrimary: Colors.neutral100,
+  fontColorGray: Colors.brand100,
+  darkOutline: Colors.brand400,
+  primaryButtonBg: Colors.neutral100,
   overlay: Colors.overlay,
-  ntWordColor: Colors.fontColorWhite,
-  pressedIconColor: Colors.primaryButtonBgDark,
+  ntWordColor: Colors.neutral100,
+  pressedIconColor: Colors.gold100,
   savedHighlight: Colors.savedHighlightDark,
 };
 

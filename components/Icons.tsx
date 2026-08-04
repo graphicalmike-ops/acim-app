@@ -7,11 +7,13 @@ import { Colors } from '@/constants/Colors';
 
 // 8-pointed star with drop shadow — matches Figma filter exactly
 // Shadow: black 60% opacity, y-offset 1, blur radius 2
-export function StarIcon({ size = 65, color = Colors.fontColorSecondary }: { size?: number; color?: string }) {
+export function StarIcon({ size = 65, color = Colors.brand100 }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 69 69" fill="none">
       <Defs>
-        <Filter id="starShadow" x="0" y="0" width="69" height="69" filterUnits="userSpaceOnUse" colorInterpolationFilters="sRGB">
+        {/* colorInterpolationFilters is a valid SVG filter prop that react-native-svg
+            passes through at runtime, but this version's Filter types don't declare it. */}
+        <Filter id="starShadow" x="0" y="0" width="69" height="69" filterUnits="userSpaceOnUse" {...({ colorInterpolationFilters: 'sRGB' } as any)}>
           <FeFlood floodOpacity={0} result="BackgroundImageFix" />
           <FeColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha" />
           <FeOffset dy={1} />
@@ -38,7 +40,7 @@ type IconProps = {
 };
 
 // Property 1=Theory — 16×16
-export function TheoryIcon({ size = 16, color = Colors.fontColorPrimary }: IconProps) {
+export function TheoryIcon({ size = 16, color = Colors.ink100 }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 16 16" fill="none">
       <Path
@@ -50,11 +52,11 @@ export function TheoryIcon({ size = 16, color = Colors.fontColorPrimary }: IconP
 }
 
 // Property 1=Exercizes — 16×16
-export function ExercizesIcon({ size = 16, color = Colors.fontColorPrimary }: IconProps) {
+export function ExercizesIcon({ size = 16, color = Colors.ink100 }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 16 16" fill="none">
       <Path
-        d="M8 4C6.875 4 6 3.125 6 2C6 0.90625 6.875 0 8 0C9.09375 0 10 0.90625 10 2C10 3.125 9.09375 4 8 4ZM7.28125 9L6.3125 7.71875L4.9375 10.7812L8.65625 14.2812C8.875 14.4688 9 14.75 9 15C9 15.875 8.15625 16 8 16H0.875C0.375 16 0 15.625 0 15.125C0 14.6562 0.375 14.25 0.875 14.25H5.15625L2.96875 12.75C1.78125 11.9375 1.34375 10.3438 2 9.03125L3.46875 5.625C3.75 4.96875 4.34375 4.59375 5 4.53125C5.65625 4.46875 6.28125 4.75 6.65625 5.28125L8.125 7.1875L10.5312 5.21875C10.9062 4.90625 11.4688 4.96875 11.7812 5.3125C12.0938 5.6875 12.0312 6.25 11.6875 6.5625L8.5625 9.125C8.375 9.28125 8.125 9.375 7.90625 9.34375C7.65625 9.3125 7.4375 9.1875 7.28125 9Z"
+        d="M10.0078 4C8.88281 4 8.00781 3.125 8.00781 2C8.00781 0.90625 8.88281 0 10.0078 0C11.1016 0 12.0078 0.90625 12.0078 2C12.0078 3.125 11.1016 4 10.0078 4ZM9.28906 9L8.32031 7.71875L6.94531 10.7812L10.6641 14.2812C10.8828 14.4688 11.0078 14.75 11.0078 15C11.0078 15.875 10.1641 16 10.0078 16H2.88281C2.38281 16 2.00781 15.625 2.00781 15.125C2.00781 14.6562 2.38281 14.25 2.88281 14.25H7.16406L4.97656 12.75C3.78906 11.9375 3.35156 10.3438 4.00781 9.03125L5.47656 5.625C5.75781 4.96875 6.35156 4.59375 7.00781 4.53125C7.66406 4.46875 8.28906 4.75 8.66406 5.28125L10.1328 7.1875L12.5391 5.21875C12.9141 4.90625 13.4766 4.96875 13.7891 5.3125C14.1016 5.6875 14.0391 6.25 13.6953 6.5625L10.5703 9.125C10.3828 9.28125 10.1328 9.375 9.91406 9.34375C9.66406 9.3125 9.44531 9.1875 9.28906 9Z"
         fill={color}
       />
     </Svg>
@@ -62,7 +64,7 @@ export function ExercizesIcon({ size = 16, color = Colors.fontColorPrimary }: Ic
 }
 
 // Property 1=Supplemental — 16×16
-export function SupplementalIcon({ size = 16, color = Colors.fontColorPrimary }: IconProps) {
+export function SupplementalIcon({ size = 16, color = Colors.ink100 }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 16 16" fill="none">
       <Path
@@ -73,20 +75,9 @@ export function SupplementalIcon({ size = 16, color = Colors.fontColorPrimary }:
   );
 }
 
-// Property 1=Tip (Solid) — 16×16
-export function TipSolidIcon({ size = 16, color = Colors.fontColorPrimary }: IconProps) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 16 16" fill="none">
-      <Path
-        d="M7.52778 4.96484C6.86111 4.77344 6.30556 4.28125 6.22222 3.65234C6.11111 2.77734 6.80556 2.03906 7.72222 1.92969V1.4375C7.72222 1.21875 7.91667 1 8.19444 1H8.66667C8.94444 1 9.16667 1.21875 9.16667 1.4375V1.92969C9.5 1.98437 9.83333 2.09375 10.1111 2.25781C10.1944 2.3125 10.2778 2.39453 10.2778 2.53125C10.2778 2.58594 10.25 2.64062 10.2222 2.66797C10.1944 2.69531 10.1944 2.72266 10.1667 2.75L9.63889 3.24219C9.52778 3.32422 9.36111 3.35156 9.22222 3.29688C9.11111 3.24219 9 3.21484 8.88889 3.21484H7.91667C7.77778 3.21484 7.66667 3.32422 7.66667 3.46094C7.66667 3.57031 7.72222 3.65234 7.83333 3.67969L9.33333 4.0625C10.0278 4.25391 10.5556 4.74609 10.6389 5.375C10.75 6.25 10.0556 6.98828 9.16667 7.09766V7.5625C9.16667 7.80859 8.94444 8 8.66667 8H8.19444C7.91667 8 7.69444 7.80859 7.69444 7.5625V7.09766C7.36111 7.07031 7.02778 6.93359 6.75 6.76953C6.66667 6.71484 6.58333 6.63281 6.58333 6.49609C6.58333 6.44141 6.61111 6.38672 6.63889 6.35938C6.66667 6.33203 6.66667 6.30469 6.69444 6.27734L7.22222 5.78516C7.33333 5.70312 7.5 5.67578 7.66667 5.73047C7.75 5.78516 7.86111 5.8125 7.97222 5.8125H8.94444C9.08333 5.8125 9.19444 5.70312 9.19444 5.56641C9.19444 5.45703 9.13889 5.375 9.02778 5.34766L7.52778 4.96484ZM15.6944 9.99609C15.8611 10.1328 16 10.3789 16 10.625C16 10.9258 15.8611 11.1719 15.6667 11.3086L11.4444 14.6172C11.1389 14.8633 10.75 15 10.3333 15H0.444444C0.194444 15 0 14.8086 0 14.5625V11.9375C0 11.7188 0.194444 11.5 0.444444 11.5H1.97222L3.25 10.4883C3.83333 10.0234 4.52778 9.77734 5.33333 9.75H9.77778C10.25 9.75 10.6389 10.1602 10.6667 10.625C10.6667 10.625 10.6667 10.625 10.6667 10.6523C10.6667 10.6797 10.6389 10.7344 10.6389 10.7891C10.5833 11.2266 10.1667 11.5 9.72222 11.5H7.55556C7.30556 11.5 7.11111 11.7188 7.11111 11.9375C7.11111 12.1836 7.30556 12.375 7.55556 12.375H10.8333C11.25 12.375 11.6389 12.2383 11.9444 11.9922L14.5 9.99609C14.8611 9.72266 15.3611 9.69531 15.6944 9.99609Z"
-        fill={color}
-      />
-    </Svg>
-  );
-}
-
-// Property 1=Tip (Light) — 16×16
-export function TipLightIcon({ size = 16, color = Colors.fontColorPrimary }: IconProps) {
+// Property 1=Tip (Light) — 16×16 — the app's single "tip"/support icon (no
+// "Solid" variant exists in Figma anymore; this replaced it everywhere).
+export function TipLightIcon({ size = 16, color = Colors.ink100 }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 16 16" fill="none">
       <Path
@@ -98,7 +89,7 @@ export function TipLightIcon({ size = 16, color = Colors.fontColorPrimary }: Ico
 }
 
 // Home — 20×16
-export function HomeIcon({ size = 16, color = Colors.fontColorPrimary }: IconProps) {
+export function HomeIcon({ size = 16, color = Colors.ink100 }: IconProps) {
   const width = size * (20 / 16);
   return (
     <Svg width={width} height={size} viewBox="0 0 20 16" fill="none">
@@ -110,31 +101,45 @@ export function HomeIcon({ size = 16, color = Colors.fontColorPrimary }: IconPro
   );
 }
 
-// Angle Right — 6×10 SVG centered in a 24×24 container
-export function AngleRightIcon({ color = Colors.fontColorGray }: { color?: string }) {
+// Property 1=Collapse — 12×12 (chevron down). New in Figma, not yet wired
+// into any screen.
+export function CollapseIcon({ size = 12, color = Colors.ink200 }: IconProps) {
   return (
-    <View style={{ width: 24, height: 24, alignItems: 'center', justifyContent: 'center' }}>
-      <Svg width={6} height={10} viewBox="0 0 6 11" fill="none">
-        <Path
-          d="M5.83594 5.27344C5.99219 5.11719 5.99219 4.89844 5.83594 4.74219L1.27344 0.117188C1.11719 -0.0390625 0.867188 -0.0390625 0.742188 0.117188L0.117188 0.742188C-0.0390625 0.867188 -0.0390625 1.11719 0.117188 1.27344L3.80469 4.99219L0.117188 8.74219C-0.0390625 8.89844 -0.0390625 9.11719 0.117188 9.27344L0.742188 9.89844C0.867188 10.0547 1.11719 10.0547 1.27344 9.89844L5.83594 5.27344Z"
-          fill={color}
-        />
-      </Svg>
-    </View>
+    <Svg width={size} height={size} viewBox="0 0 12 12" fill="none">
+      <Path
+        d="M6.31825 2.6378C6.13104 2.45407 5.86895 2.45407 5.68175 2.6378L0.140406 8.00262C-0.0468019 8.18635 -0.0468019 8.48031 0.140406 8.6273L0.889235 9.3622C1.039 9.54593 1.33853 9.54593 1.52574 9.3622L5.98128 5.02625L10.4743 9.3622C10.6615 9.54593 10.9236 9.54593 11.1108 9.3622L11.8596 8.6273C12.0468 8.48032 12.0468 8.18635 11.8596 8.00262L6.31825 2.6378Z"
+        fill={color}
+      />
+    </Svg>
   );
 }
 
-// Plus — 10×10 SVG centered in a (size)×(size) container, default 24×24.
-// glyphSize optionally overrides the drawn symbol's size independently of
-// the container (which stays the tap target), default keeps the original
-// 10/24 proportion.
-export function PlusIcon({ size = 24, glyphSize, color = Colors.fontColorGray }: { size?: number; glyphSize?: number; color?: string }) {
+// Property 1=Expand — 12×12 (chevron up). New in Figma, not yet wired into
+// any screen.
+export function ExpandIcon({ size = 12, color = Colors.ink200 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 12 12" fill="none">
+      <Path
+        d="M5.68175 9.3622C5.86896 9.54593 6.13105 9.54593 6.31825 9.3622L11.8596 3.99738C12.0468 3.81365 12.0468 3.51969 11.8596 3.3727L11.1108 2.6378C10.961 2.45407 10.6615 2.45407 10.4743 2.6378L6.01872 6.97375L1.52574 2.6378C1.33853 2.45407 1.07644 2.45407 0.889237 2.6378L0.140407 3.3727C-0.0468011 3.51969 -0.0468011 3.81365 0.140407 3.99738L5.68175 9.3622Z"
+        fill={color}
+      />
+    </Svg>
+  );
+}
+
+// Plus — Figma's own "Plus" component is a flat 16×16 glyph with no
+// tap-target concept, but this button's tap target is baked in as a
+// separate `size` (container) from `glyphSize` (drawn glyph) — kept as-is
+// per product decision. viewBox is the new 16-unit Figma coordinate space;
+// glyphSize still defaults to 10 (unchanged) so the rendered footprint
+// matches what shipped before — SVG's viewBox scaling handles the rest.
+export function PlusIcon({ size = 24, glyphSize, color = Colors.ink200 }: { size?: number; glyphSize?: number; color?: string }) {
   const resolvedGlyphSize = glyphSize ?? size * (10 / 24);
   return (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <Svg width={resolvedGlyphSize} height={resolvedGlyphSize} viewBox="0 0 10 10" fill="none">
+      <Svg width={resolvedGlyphSize} height={resolvedGlyphSize} viewBox="0 0 16 16" fill="none">
         <Path
-          d="M9.5 4H6V0.5C6 0.224 5.776 0 5.5 0H4.5C4.224 0 4 0.224 4 0.5V4H0.5C0.224 4 0 4.224 0 4.5V5.5C0 5.776 0.224 6 0.5 6H4V9.5C4 9.776 4.224 10 4.5 10H5.5C5.776 10 6 9.776 6 9.5V6H9.5C9.776 6 10 5.776 10 5.5V4.5C10 4.224 9.776 4 9.5 4Z"
+          d="M15.3333 6.66667H9.33333V0.666667C9.33333 0.333333 9 0 8.66667 0H7.33333C6.95833 0 6.66667 0.333333 6.66667 0.666667V6.66667H0.666667C0.291667 6.66667 0 7 0 7.33333V8.66667C0 9.04167 0.291667 9.33333 0.666667 9.33333H6.66667V15.3333C6.66667 15.7083 6.95833 16 7.33333 16H8.66667C9 16 9.33333 15.7083 9.33333 15.3333V9.33333H15.3333C15.6667 9.33333 16 9.04167 16 8.66667V7.33333C16 7 15.6667 6.66667 15.3333 6.66667Z"
           fill={color}
         />
       </Svg>
@@ -142,13 +147,18 @@ export function PlusIcon({ size = 24, glyphSize, color = Colors.fontColorGray }:
   );
 }
 
-// Minus — 10×2 SVG centered in a 24×24 container
-export function MinusIcon({ color = Colors.fontColorGray }: { color?: string }) {
+// Minus — pairs with Plus in the contents.tsx accordion toggle, so it
+// mirrors Plus's size/glyphSize API and default footprint (10px glyph in a
+// 24px tap target) even though Figma's own "Minus" component is natively
+// 12×12 — a plain bar rendered inside a square viewBox, not the old bare
+// 10×2 rect, so it needs a real (square) viewBox to display correctly.
+export function MinusIcon({ size = 24, glyphSize, color = Colors.ink200 }: { size?: number; glyphSize?: number; color?: string }) {
+  const resolvedGlyphSize = glyphSize ?? size * (10 / 24);
   return (
-    <View style={{ width: 24, height: 24, alignItems: 'center', justifyContent: 'center' }}>
-      <Svg width={10} height={2} viewBox="0 0 10 2" fill="none">
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <Svg width={resolvedGlyphSize} height={resolvedGlyphSize} viewBox="0 0 12 12" fill="none">
         <Path
-          d="M9.5 0H0.5C0.224 0 0 0.224 0 0.5V1.5C0 1.776 0.224 2 0.5 2H9.5C9.776 2 10 1.776 10 1.5V0.5C10 0.224 9.776 0 9.5 0Z"
+          d="M11.5 5H0.5C0.21875 5 0 5.25 0 5.5V6.5C0 6.78125 0.21875 7 0.5 7H11.5C11.75 7 12 6.78125 12 6.5V5.5C12 5.25 11.75 5 11.5 5Z"
           fill={color}
         />
       </Svg>
@@ -157,7 +167,7 @@ export function MinusIcon({ color = Colors.fontColorGray }: { color?: string }) 
 }
 
 // Teacher — 16×16 (book-reader)
-export function TeacherIcon({ size = 16, color = Colors.fontColorPrimary }: IconProps) {
+export function TeacherIcon({ size = 16, color = Colors.ink100 }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 16 16" fill="none">
       <Path
@@ -169,7 +179,7 @@ export function TeacherIcon({ size = 16, color = Colors.fontColorPrimary }: Icon
 }
 
 // Light mode (sun) — 16×16, stroke-based
-export function LightModeIcon({ size = 16, color = Colors.fontColorPrimary }: IconProps) {
+export function LightModeIcon({ size = 16, color = Colors.ink100 }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 16 16" fill="none">
       <Circle cx="8" cy="8" r="2.25" stroke={color} strokeWidth="1.5" />
@@ -185,131 +195,84 @@ export function LightModeIcon({ size = 16, color = Colors.fontColorPrimary }: Ic
   );
 }
 
-// Dark mode (moon) — 24×24
-export function DarkModeIcon({ size = 24, color = Colors.fontColorPrimary }: IconProps) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <G transform="translate(0.72, 0)">
-        <Path
-          d="M 12 24 C 15.65625 24 19.078125 22.359375 21.28125 19.59375 C 22.640625 17.953125 21.1875 15.5625 19.125 15.9375 C 15.28125 16.6875 11.71875 13.734375 11.71875 9.84375 C 11.71875 7.546875 12.9375 5.484375 14.859375 4.40625 C 16.6875 3.375 16.21875 0.609375 14.15625 0.234375 C 13.453125 0.09375 12.75 0.046875 12 0 C 5.34375 0 0 5.390625 0 12 C 0 18.65625 5.34375 24 12 24 Z M 12 2.25 C 12.609375 2.25 13.171875 2.34375 13.78125 2.4375 C 11.203125 3.890625 9.46875 6.65625 9.46875 9.84375 C 9.46875 15.140625 14.34375 19.171875 19.546875 18.140625 C 17.765625 20.34375 15.046875 21.75 12 21.75 C 6.609375 21.75 2.25 17.390625 2.25 12 C 2.25 6.65625 6.609375 2.25 12 2.25 Z"
-          fill={color}
-        />
-      </G>
-    </Svg>
-  );
-}
-
-// Search — 24×24
-export function SearchIcon({ size = 16, color = Colors.fontColorPrimary }: IconProps) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Path
-        d="M 23.824132877381533 21.952218430034133 L 18.149487054225695 16.288639687957094 C 18.008793356130923 16.195026816187227 17.86809965803615 16.10141394441736 17.72740595994138 16.10141394441736 L 17.117733268197362 16.10141394441736 C 18.571568148510014 14.416382252559728 19.5095261358085 12.169673330082887 19.5095261358085 9.735738664066309 C 19.5095261358085 4.399804973183812 15.101123595505618 0 9.75476306790425 0 C 4.361504640937958 0 0 4.399804973183812 0 9.735738664066309 C 0 15.118478790833741 4.361504640937958 19.471477328132618 9.75476306790425 19.471477328132618 C 12.193453834880312 19.471477328132618 14.397655105031752 18.582155046318867 16.13287738153395 17.13115553388591 L 16.13287738153395 17.739639200390055 C 16.13287738153395 17.880058508044858 16.179775280898873 18.02047781569966 16.273571079628724 18.160897123354463 L 21.948216902784562 23.8244758654315 C 22.182706399609184 24.05850804485617 22.55788959452858 24.05850804485617 22.745481191988276 23.8244758654315 L 23.824132877381533 22.747927840078013 C 24.058622374206156 22.560702096538275 24.058622374206156 22.186250609458803 23.824132877381533 21.952218430034133 Z M 9.75476306790425 17.22476840565578 C 5.580850024425989 17.22476840565578 2.2510991695163654 13.901511457825452 2.2510991695163654 9.735738664066309 C 2.2510991695163654 5.616772306192101 5.580850024425989 2.2467089224768406 9.75476306790425 2.2467089224768406 C 13.881778212017586 2.2467089224768406 17.258426966292134 5.616772306192101 17.258426966292134 9.735738664066309 C 17.258426966292134 13.901511457825452 13.881778212017586 17.22476840565578 9.75476306790425 17.22476840565578 Z"
-        fill={color}
-      />
-    </Svg>
-  );
-}
-
-// Bookmark — 18×24
-export function BookmarkIcon({ size = 16, color = Colors.fontColorPrimary }: IconProps) {
-  const width = size * (18 / 24);
-  return (
-    <Svg width={width} height={size} viewBox="0 0 18 24" fill="none">
-      <Path
-        d="M 15.75 0 L 2.25 0 C 0.984375 0 0 1.03125 0 2.25 L 0 24 L 9 18.75 L 18 24 L 18 2.25 C 18 1.03125 16.96875 0 15.75 0 Z M 15.75 20.109375 L 9 16.171875 L 2.25 20.109375 L 2.25 2.53125 C 2.25 2.390625 2.34375 2.25 2.53125 2.25 L 15.46875 2.25 C 15.609375 2.25 15.75 2.390625 15.75 2.53125 L 15.75 20.109375 Z"
-        fill={color}
-      />
-    </Svg>
-  );
-}
-
-// Notes — 24×24 (formerly Highlighter, updated in Figma)
-export function NotesIcon({ size = 16, color = Colors.fontColorPrimary }: IconProps) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Path
-        d="M16.7718 14.1403C16.6884 14.2225 16.6884 14.3046 16.6884 14.3868V19.0284H2.00261V4.56968H12.0574C12.1408 4.56968 12.2243 4.56968 12.3077 4.48753L13.6428 3.17311C13.8514 2.96773 13.6845 2.59804 13.3924 2.59804H2.00261C0.876141 2.59804 0 3.50171 0 4.56968V19.0284C0 20.1374 0.876141 21 2.00261 21H16.6884C17.7731 21 18.691 20.1374 18.691 19.0284V13.0724C18.691 12.7848 18.3155 12.6205 18.1069 12.8259L16.7718 14.1403ZM23.2803 5.88411C24.2399 4.93936 24.2399 3.41956 23.2803 2.47482L21.4863 0.708557C20.5267 -0.236186 18.9831 -0.236186 18.0235 0.708557L7.09257 11.4704L6.67536 15.2083C6.5502 16.2763 7.46806 17.18 8.5528 17.0567L12.3494 16.646L23.2803 5.88411ZM19.1917 7.11638L11.4316 14.7565L8.67797 15.0851L9.01173 12.3741L16.7718 4.73399L19.1917 7.11638ZM21.8618 3.87139C22.0704 4.0357 22.0704 4.28215 21.9035 4.48753L20.6102 5.76088L18.1904 3.33741L19.442 2.10513C19.6089 1.89976 19.9009 1.89976 20.0678 2.10513L21.8618 3.87139Z"
-        fill={color}
-      />
-    </Svg>
-  );
-}
-
-// Share — 24×24
-export function ShareIcon({ size = 16, color = Colors.fontColorPrimary }: IconProps) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Path
-        d="M17.5 15C16.2812 15 15.2031 15.4688 14.3594 16.2656L9.76562 13.3594C10.0469 12.5156 10.0469 11.5312 9.76562 10.6875L14.3594 7.78125C15.2031 8.53125 16.2812 9 17.5 9C19.9844 9 22 6.98438 22 4.5C22 2.01562 19.9844 0 17.5 0C15.0156 0 13 2.01562 13 4.5C13 4.96875 13.0469 5.4375 13.1875 5.85938L8.59375 8.76562C7.75 7.96875 6.67188 7.5 5.5 7.5C3.01562 7.5 1 9.51562 1 12C1 14.4844 3.01562 16.5 5.5 16.5C6.67188 16.5 7.75 16.0312 8.59375 15.2812L13.1875 18.1875C13.0469 18.6094 13 19.0781 13 19.5C13 21.9844 15.0156 24 17.5 24C19.9844 24 22 21.9844 22 19.5C22 17.0156 19.9844 15 17.5 15ZM17.5 2.25C18.7188 2.25 19.75 3.28125 19.75 4.5C19.75 5.76562 18.7188 6.75 17.5 6.75C16.2344 6.75 15.25 5.76562 15.25 4.5C15.25 3.28125 16.2344 2.25 17.5 2.25ZM5.5 14.25C4.23438 14.25 3.25 13.2656 3.25 12C3.25 10.7812 4.23438 9.75 5.5 9.75C6.71875 9.75 7.75 10.7812 7.75 12C7.75 13.2656 6.71875 14.25 5.5 14.25ZM17.5 21.75C16.2344 21.75 15.25 20.7656 15.25 19.5C15.25 18.2812 16.2344 17.25 17.5 17.25C18.7188 17.25 19.75 18.2812 19.75 19.5C19.75 20.7656 18.7188 21.75 17.5 21.75Z"
-        fill={color}
-      />
-    </Svg>
-  );
-}
-
-// Delete (trash) — 24×24
-export function DeleteIcon({ size = 16, color = Colors.fontColorPrimary }: IconProps) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Path
-        d="M14.0625 19.5H15.1875C15.4688 19.5 15.75 19.2656 15.75 18.9375V8.8125C15.75 8.53125 15.4688 8.25 15.1875 8.25H14.0625C13.7344 8.25 13.5 8.53125 13.5 8.8125V18.9375C13.5 19.2656 13.7344 19.5 14.0625 19.5ZM21.75 3.75H17.8594L16.2656 1.125C15.8906 0.46875 15.1406 0 14.3438 0H9.60938C8.8125 0 8.0625 0.46875 7.6875 1.125L6.09375 3.75H2.25C1.82812 3.75 1.5 4.125 1.5 4.5V5.25C1.5 5.67188 1.82812 6 2.25 6H3V21.75C3 23.0156 3.98438 24 5.25 24H18.75C19.9688 24 21 23.0156 21 21.75V6H21.75C22.125 6 22.5 5.67188 22.5 5.25V4.5C22.5 4.125 22.125 3.75 21.75 3.75ZM9.51562 2.39062C9.5625 2.34375 9.65625 2.25 9.75 2.25C9.75 2.25 9.75 2.25 9.79688 2.25H14.2031C14.2969 2.25 14.3906 2.34375 14.4375 2.39062L15.2344 3.75H8.71875L9.51562 2.39062ZM18.75 21.75H5.25V6H18.75V21.75ZM8.8125 19.5H9.9375C10.2188 19.5 10.5 19.2656 10.5 18.9375V8.8125C10.5 8.53125 10.2188 8.25 9.9375 8.25H8.8125C8.48438 8.25 8.25 8.53125 8.25 8.8125V18.9375C8.25 19.2656 8.48438 19.5 8.8125 19.5Z"
-        fill={color}
-      />
-    </Svg>
-  );
-}
-
-// Actions (vertical ellipsis) — 16×16
-export function ActionsIcon({ size = 16, color = Colors.fontColorPrimary }: IconProps) {
+// Dark mode (moon) — 16×16 (now a native square asset — was a 24×24 crop
+// with a manual translate offset before this sync)
+export function DarkModeIcon({ size = 16, color = Colors.ink100 }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 16 16" fill="none">
       <Path
-        d="M8 6.5C7.15625 6.5 6.5 7.1875 6.5 8C6.5 8.84375 7.15625 9.5 8 9.5C8.8125 9.5 9.5 8.84375 9.5 8C9.5 7.1875 8.8125 6.5 8 6.5ZM6.5 3.25C6.5 4.09375 7.15625 4.75 8 4.75C8.8125 4.75 9.5 4.09375 9.5 3.25C9.5 2.4375 8.8125 1.75 8 1.75C7.15625 1.75 6.5 2.4375 6.5 3.25ZM6.5 12.75C6.5 13.5938 7.15625 14.25 8 14.25C8.8125 14.25 9.5 13.5938 9.5 12.75C9.5 11.9375 8.8125 11.25 8 11.25C7.15625 11.25 6.5 11.9375 6.5 12.75Z"
+        d="M8.47949 16C10.917 16 13.1982 14.9062 14.667 13.0625C15.5732 11.9688 14.6045 10.375 13.2295 10.625C10.667 11.125 8.29199 9.15625 8.29199 6.5625C8.29199 5.03125 9.10449 3.65625 10.3857 2.9375C11.6045 2.25 11.292 0.40625 9.91699 0.15625C9.44824 0.0625 8.97949 0.03125 8.47949 0C4.04199 0 0.479492 3.59375 0.479492 8C0.479492 12.4375 4.04199 16 8.47949 16ZM8.47949 1.5C8.88574 1.5 9.26074 1.5625 9.66699 1.625C7.94824 2.59375 6.79199 4.4375 6.79199 6.5625C6.79199 10.0938 10.042 12.7812 13.5107 12.0938C12.3232 13.5625 10.5107 14.5 8.47949 14.5C4.88574 14.5 1.97949 11.5938 1.97949 8C1.97949 4.4375 4.88574 1.5 8.47949 1.5Z"
         fill={color}
       />
     </Svg>
   );
 }
 
-// Check — 24×24
-export function CheckIcon({ size = 16, color = Colors.fontColorPrimary }: IconProps) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Path
-        d="M18.5468 5.6383L8.84752 15.3376L5.30709 11.7603C5.12269 11.6128 4.82766 11.6128 4.68014 11.7603L3.61064 12.8298C3.46312 12.9773 3.46312 13.2723 3.61064 13.4567L8.55248 18.3617C8.73688 18.5461 8.99504 18.5461 9.17943 18.3617L20.2433 7.29787C20.3908 7.15035 20.3908 6.85532 20.2433 6.67092L19.1738 5.6383C19.0262 5.4539 18.7312 5.4539 18.5468 5.6383Z"
-        fill={color}
-      />
-    </Svg>
-  );
-}
-
-// Settings (cog) — 16×16
-export function SettingsIcon({ size = 16, color = Colors.fontColorPrimary }: IconProps) {
+// Search — 16×16 (native asset — was a 24-unit crop before this sync)
+export function SearchIcon({ size = 16, color = Colors.ink100 }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 16 16" fill="none">
       <Path
-        d="M14.0952 7.37033L15.1285 6.7891C15.4191 6.62765 15.5805 6.27245 15.4836 5.91726C15.1285 4.56105 14.3858 3.33401 13.417 2.333C13.1587 2.10696 12.7712 2.04238 12.4806 2.20383L11.4473 2.81736C11.1244 2.55903 10.7692 2.36529 10.3817 2.20383V1.00908C10.3817 0.653885 10.1557 0.363269 9.8005 0.266398C8.47659 -0.0887992 7.02351 -0.0887992 5.69959 0.266398C5.3444 0.363269 5.11836 0.653885 5.11836 1.00908V2.20383C4.73087 2.36529 4.37568 2.55903 4.05277 2.81736L3.01947 2.20383C2.72886 2.04238 2.34137 2.10696 2.08304 2.333C1.11433 3.33401 0.371641 4.56105 0.016444 5.91726C-0.0804278 6.27245 0.0810253 6.62765 0.371641 6.7891L1.40494 7.37033C1.37265 7.59637 1.37265 7.79011 1.37265 8.01614C1.37265 8.20989 1.37265 8.40363 1.40494 8.59738L0.371641 9.2109C0.0810253 9.37235 -0.0804278 9.72755 0.016444 10.0827C0.371641 11.439 1.11433 12.666 2.08304 13.667C2.34137 13.893 2.72886 13.9576 3.01947 13.7962L4.05277 13.1826C4.37568 13.441 4.73087 13.6347 5.11836 13.7962V14.9909C5.11836 15.3461 5.3444 15.6367 5.69959 15.7336C7.02351 16.0888 8.47659 16.0888 9.8005 15.7336C10.1557 15.6367 10.3817 15.3461 10.3817 14.9909V13.7962C10.7692 13.6347 11.1244 13.441 11.4473 13.1826L12.4806 13.7962C12.7712 13.9576 13.1587 13.893 13.417 13.667C14.3858 12.666 15.1285 11.439 15.4836 10.0827C15.5805 9.72755 15.4191 9.37235 15.1285 9.2109L14.0952 8.59738C14.1274 8.20989 14.1274 7.79011 14.0952 7.37033ZM12.3837 9.43693L13.8045 10.2442C13.5462 10.9223 13.191 11.5681 12.7067 12.1171L11.2859 11.3098C10.2526 12.1816 10.1234 12.2785 8.83178 12.7306V14.3774C8.47659 14.442 8.12139 14.4743 7.7339 14.4743C7.3787 14.4743 7.02351 14.442 6.66831 14.3774V12.7306C5.37669 12.2785 5.21523 12.1816 4.21422 11.3098L2.79344 12.1171C2.30908 11.5681 1.95388 10.9223 1.69556 10.2442L3.11634 9.43693C2.85802 8.08073 2.85802 7.91927 3.11634 6.56307L1.69556 5.7558C1.95388 5.0777 2.30908 4.43189 2.79344 3.88295L4.21422 4.69021C5.24752 3.81837 5.37669 3.72149 6.66831 3.26942V1.6226C7.02351 1.55802 7.3787 1.52573 7.76619 1.52573C8.12139 1.52573 8.47659 1.55802 8.83178 1.6226V3.26942C10.1234 3.72149 10.2849 3.81837 11.2859 4.69021L12.7067 3.88295C13.191 4.43189 13.5462 5.0777 13.8045 5.7558L12.3837 6.56307C12.6421 7.91927 12.6421 8.08073 12.3837 9.43693ZM7.76619 4.88396C6.05479 4.88396 4.66629 6.30474 4.66629 7.98385C4.66629 9.69526 6.05479 11.0838 7.76619 11.0838C9.4453 11.0838 10.8661 9.69526 10.8661 7.98385C10.8661 6.30474 9.4453 4.88396 7.76619 4.88396ZM7.76619 9.5338C6.89434 9.5338 6.21624 8.8557 6.21624 7.98385C6.21624 7.1443 6.89434 6.43391 7.76619 6.43391C8.60575 6.43391 9.31614 7.1443 9.31614 7.98385C9.31614 8.8557 8.60575 9.5338 7.76619 9.5338Z"
+        d="M15.8828 14.6348L12.0997 10.8591C12.0059 10.7967 11.9121 10.7343 11.8183 10.7343H11.4118C12.381 9.61092 13.0064 8.11312 13.0064 6.49049C13.0064 2.9332 10.0674 0 6.50318 0C2.90767 0 0 2.9332 0 6.49049C0 10.079 2.90767 12.981 6.50318 12.981C8.12897 12.981 9.59844 12.3881 10.7553 11.4208V11.8264C10.7553 11.92 10.7865 12.0137 10.849 12.1073L14.6321 15.883C14.7885 16.039 15.0386 16.039 15.1637 15.883L15.8828 15.1653C16.0391 15.0405 16.0391 14.7908 15.8828 14.6348ZM6.50318 11.4832C3.72057 11.4832 1.50073 9.26767 1.50073 6.49049C1.50073 3.74451 3.72057 1.49781 6.50318 1.49781C9.25452 1.49781 11.5056 3.74451 11.5056 6.49049C11.5056 9.26767 9.25452 11.4832 6.50318 11.4832Z"
         fill={color}
       />
     </Svg>
   );
 }
 
-// Close (times) — 18×18
-export function CloseIcon({ size = 16, color = Colors.fontColorPrimary }: IconProps) {
+// Bookmark — 16×16 native square asset (was a non-square 18×24 crop before
+// this sync; the ribbon glyph inside keeps the same proportions, so this
+// isn't a visible size change at any existing call site).
+export function BookmarkIcon({ size = 16, color = Colors.ink100 }: IconProps) {
   return (
-    <Svg width={size} height={size} viewBox="0 0 18 18" fill="none">
+    <Svg width={size} height={size} viewBox="0 0 16 16" fill="none">
       <Path
-        d="M11.6719 8.97188L17.7469 2.95312C18.0844 2.61562 18.0844 1.99687 17.7469 1.65937L16.3406 0.253125C16.0031 -0.084375 15.3844 -0.084375 15.0469 0.253125L9.02812 6.32812L2.95312 0.253125C2.61562 -0.084375 1.99687 -0.084375 1.65937 0.253125L0.253125 1.65937C-0.084375 1.99687 -0.084375 2.61562 0.253125 2.95312L6.32812 8.97188L0.253125 15.0469C-0.084375 15.3844 -0.084375 16.0031 0.253125 16.3406L1.65937 17.7469C1.99687 18.0844 2.61562 18.0844 2.95312 17.7469L9.02812 11.6719L15.0469 17.7469C15.3844 18.0844 16.0031 18.0844 16.3406 17.7469L17.7469 16.3406C18.0844 16.0031 18.0844 15.3844 17.7469 15.0469L11.6719 8.97188Z"
+        d="M12.5 0H3.5C2.65625 0 2 0.6875 2 1.5V16L8 12.5L14 16V1.5C14 0.6875 13.3125 0 12.5 0ZM12.5 13.4062L8 10.7812L3.5 13.4062V1.6875C3.5 1.59375 3.5625 1.5 3.6875 1.5H12.3125C12.4062 1.5 12.5 1.59375 12.5 1.6875V13.4062Z"
         fill={color}
       />
     </Svg>
   );
 }
 
-// Back — 16×16
-export function BackIcon({ size = 16, color = Colors.fontColorPrimary }: IconProps) {
+// Share — 16×16 (native asset — was a 24-unit crop before this sync)
+export function ShareIcon({ size = 16, color = Colors.ink100 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 16 16" fill="none">
+      <Path
+        d="M11.667 10C10.8545 10 10.1357 10.3125 9.57324 10.8438L6.51074 8.90625C6.69824 8.34375 6.69824 7.6875 6.51074 7.125L9.57324 5.1875C10.1357 5.6875 10.8545 6 11.667 6C13.3232 6 14.667 4.65625 14.667 3C14.667 1.34375 13.3232 0 11.667 0C10.0107 0 8.66699 1.34375 8.66699 3C8.66699 3.3125 8.69824 3.625 8.79199 3.90625L5.72949 5.84375C5.16699 5.3125 4.44824 5 3.66699 5C2.01074 5 0.666992 6.34375 0.666992 8C0.666992 9.65625 2.01074 11 3.66699 11C4.44824 11 5.16699 10.6875 5.72949 10.1875L8.79199 12.125C8.69824 12.4062 8.66699 12.7188 8.66699 13C8.66699 14.6562 10.0107 16 11.667 16C13.3232 16 14.667 14.6562 14.667 13C14.667 11.3438 13.3232 10 11.667 10ZM11.667 1.5C12.4795 1.5 13.167 2.1875 13.167 3C13.167 3.84375 12.4795 4.5 11.667 4.5C10.8232 4.5 10.167 3.84375 10.167 3C10.167 2.1875 10.8232 1.5 11.667 1.5ZM3.66699 9.5C2.82324 9.5 2.16699 8.84375 2.16699 8C2.16699 7.1875 2.82324 6.5 3.66699 6.5C4.47949 6.5 5.16699 7.1875 5.16699 8C5.16699 8.84375 4.47949 9.5 3.66699 9.5ZM11.667 14.5C10.8232 14.5 10.167 13.8438 10.167 13C10.167 12.1875 10.8232 11.5 11.667 11.5C12.4795 11.5 13.167 12.1875 13.167 13C13.167 13.8438 12.4795 14.5 11.667 14.5Z"
+        fill={color}
+      />
+    </Svg>
+  );
+}
+
+// Property 1=Actions (vertical ellipsis) — 16×16
+export function ActionsIcon({ size = 16, color = Colors.ink100 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 16 16" fill="none">
+      <Path
+        d="M8.26473 6.08C7.18473 6.08 6.34473 6.96 6.34473 8C6.34473 9.08 7.18473 9.92 8.26473 9.92C9.30473 9.92 10.1847 9.08 10.1847 8C10.1847 6.96 9.30473 6.08 8.26473 6.08ZM6.34473 1.92C6.34473 3 7.18473 3.84 8.26473 3.84C9.30473 3.84 10.1847 3 10.1847 1.92C10.1847 0.88 9.30473 0 8.26473 0C7.18473 0 6.34473 0.88 6.34473 1.92ZM6.34473 14.08C6.34473 15.16 7.18473 16 8.26473 16C9.30473 16 10.1847 15.16 10.1847 14.08C10.1847 13.04 9.30473 12.16 8.26473 12.16C7.18473 12.16 6.34473 13.04 6.34473 14.08Z"
+        fill={color}
+      />
+    </Svg>
+  );
+}
+
+// Property 1=Close (times) — 12×12 (native asset — was an 18-unit crop
+// before this sync; the one live call site already passes size={12}).
+export function CloseIcon({ size = 12, color = Colors.ink100 }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 12 12" fill="none">
+      <Path
+        d="M7.78125 5.98125L11.8313 1.96875C12.0563 1.74375 12.0563 1.33125 11.8313 1.10625L10.8938 0.16875C10.6688 -0.05625 10.2563 -0.05625 10.0312 0.16875L6.01875 4.21875L1.96875 0.16875C1.74375 -0.05625 1.33125 -0.05625 1.10625 0.16875L0.16875 1.10625C-0.05625 1.33125 -0.05625 1.74375 0.16875 1.96875L4.21875 5.98125L0.16875 10.0312C-0.05625 10.2563 -0.05625 10.6688 0.16875 10.8938L1.10625 11.8313C1.33125 12.0563 1.74375 12.0563 1.96875 11.8313L6.01875 7.78125L10.0312 11.8313C10.2563 12.0563 10.6688 12.0563 10.8938 11.8313L11.8313 10.8938C12.0563 10.6688 12.0563 10.2563 11.8313 10.0312L7.78125 5.98125Z"
+        fill={color}
+      />
+    </Svg>
+  );
+}
+
+// Property 1=Back — 16×16
+export function BackIcon({ size = 16, color = Colors.ink100 }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 16 16" fill="none">
       <Path

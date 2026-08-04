@@ -1,8 +1,9 @@
 import { View, StyleSheet } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { Colors } from '@/constants/Colors';
-import { TipSolidIcon } from '@/components/Icons';
+import { TipLightIcon } from '@/components/Icons';
 import { RipplePressable } from '@/components/RipplePressable';
+import { Spacing } from '@/constants/Tokens';
 
 type Props = {
   size?: 'md' | 'lg';
@@ -15,7 +16,7 @@ type Props = {
 
 // Icon buttons fill/clear their ripple instantly (no grow/fade animation) —
 // only the pressed-state color/fill swap remains, no motion.
-export function TertiaryButton({ size = 'md', hitSize, onPress, color = Colors.fontColorPrimary, rippleColor = Colors.backgroundColor, children }: Props) {
+export function TertiaryButton({ size = 'md', hitSize, onPress, color = Colors.ink100, rippleColor = Colors.brand100, children }: Props) {
   const containerSize = hitSize ?? (size === 'md' ? 24 : 40);
 
   return (
@@ -25,7 +26,7 @@ export function TertiaryButton({ size = 'md', hitSize, onPress, color = Colors.f
         height: containerSize,
         borderRadius: containerSize / 2,
         overflow: 'hidden',
-        padding: 4,
+        padding: Spacing[4],
         alignItems: 'center',
         justifyContent: 'center',
       }}
@@ -44,7 +45,7 @@ export function TertiaryButton({ size = 'md', hitSize, onPress, color = Colors.f
             </Svg>
           </View>
         ) : (
-          <TipSolidIcon size={24} color={color} />
+          <TipLightIcon size={24} color={color} />
         )
       }
     </RipplePressable>

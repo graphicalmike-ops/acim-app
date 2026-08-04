@@ -4,8 +4,9 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { MenuView } from '@react-native-menu/menu';
-import { BackIcon, HomeIcon, ActionsIcon } from '@/components/Icons';
+import { ActionsIcon } from '@/components/Icons';
 import { TertiaryButton } from '@/components/TertiaryButton';
+import { NavBar } from '@/components/NavBar';
 import { ReaderToolButton } from '@/components/ReaderToolButton';
 import { NoteInput } from '@/components/NoteInput';
 import { SavedItemRow } from '@/components/SavedItemRow';
@@ -16,7 +17,8 @@ import { AppScrollView } from '@/components/AppScrollView';
 import { useTheme, useThemeColors } from '@/utils/theme';
 import { splitQueryTerms, normalizeForMatch, formatRouteId, SearchResult } from '@/utils/search';
 import { Colors } from '@/constants/Colors';
-import { UIFonts } from '@/constants/Typography';
+import { Radius, BorderWidth, Spacing } from '@/constants/Tokens';
+import { UIFonts, BookFonts } from '@/constants/Typography';
 import { Sentence, ContentBlock, CONTENT, resolveContentKey, getVersesText } from '@/utils/content';
 import { useBookmarks, BookId as SavedBookId, bookmarkHref, SavedBookmark } from '@/utils/bookmarks';
 
@@ -1106,20 +1108,12 @@ function renderInline(
         ]}
         onLayout={handleNavBarLayout}
       >
-        <View style={styles.navRow}>
-          <View style={styles.navLeft}>
-            <TertiaryButton hitSize={40} onPress={() => router.back()}>
-              {(pressed) => <BackIcon size={16} color={pressed ? t.pressedIconColor : t.fontColorPrimary} />}
-            </TertiaryButton>
-            <View style={[styles.navMeta, !navSubtitle && { justifyContent: 'center' }]}>
-              <Text style={[styles.navSection, !navSubtitle && styles.navSectionOnly]} numberOfLines={1}>{navTitle}</Text>
-              {!!navSubtitle && <Text style={styles.navChapter} numberOfLines={1}>{navSubtitle}</Text>}
-            </View>
-          </View>
-          <TertiaryButton hitSize={40} onPress={() => setTimeout(() => router.navigate('/home'), 100)}>
-            {(pressed) => <HomeIcon size={16} color={pressed ? t.pressedIconColor : t.fontColorPrimary} />}
-          </TertiaryButton>
-        </View>
+        <NavBar
+          eyebrow={navSubtitle ? navTitle : undefined}
+          title={navSubtitle || navTitle}
+          onBack={() => router.back()}
+          onHome={() => setTimeout(() => router.navigate('/home'), 100)}
+        />
       </Animated.View>
 
       <AppScrollView
@@ -1172,7 +1166,7 @@ function renderInline(
                   {block.subtitle ? (
                     <>
                       <Text selectable style={styles.chapterNumber}>{fmt(block.title ?? '')}</Text>
-                      <Text selectable style={[styles.chapterHeading, { marginTop: 4 }]}>{fmt(block.subtitle ?? '')}</Text>
+                      <Text selectable style={[styles.chapterHeading, { marginTop: Spacing[4] }]}>{fmt(block.subtitle ?? '')}</Text>
                     </>
                   ) : (
                     <Text selectable style={isSetIntro ? styles.chapterNumber : styles.chapterHeading}>{fmt(block.title ?? '')}</Text>
@@ -1228,7 +1222,7 @@ function renderInline(
                 <View key={key} style={{ marginTop: mt }} onLayout={lessonLayout}>
                   <Text selectable style={styles.lessonTitle}>{block.title}</Text>
                   {block.subtitle && (
-                    <Text selectable style={[styles.lessonSubtitle, { marginTop: 4 }]}>{block.subtitle}</Text>
+                    <Text selectable style={[styles.lessonSubtitle, { marginTop: Spacing[4] }]}>{block.subtitle}</Text>
                   )}
                 </View>
               );
@@ -1261,7 +1255,7 @@ function renderInline(
                           style={[
                             styles.bodyLarge,
                             { fontFamily: stFont(s) },
-                            s.spaceBefore && si > 0 && { marginTop: 20 },
+                            s.spaceBefore && si > 0 && { marginTop: Spacing[20] },
                             saved && styles.verseSaved,
                             selected && styles.verseSelected,
                           ]}
@@ -1315,7 +1309,7 @@ function renderInline(
                     {lines.map((line, li) => (
                       <Text key={li} selectable style={[
                         styles.bodyLarge,
-                        line.spaceBefore && { marginTop: 20 },
+                        line.spaceBefore && { marginTop: Spacing[20] },
                       ]}>
                         {li === 0 && numbered && block.paragraph != null && <Text style={styles.bodyLarge}>{block.paragraph}.{'  '}</Text>}
                         {line.sentences.map(({ s, oi }, si) => {
@@ -1481,9 +1475,6 @@ function renderInline(
                   </View>
                   <View style={styles.toolsDrawerRow}>
                     <ReaderToolButton variant="save" style={styles.toolsDrawerButton} onPress={handleSaveTapped} />
-                    {/* Notes button hidden — may be restored later
-                    <ReaderToolButton variant="notes" style={styles.toolsDrawerButton} />
-                    */}
                     <ReaderToolButton variant="share" style={styles.toolsDrawerButton} onPress={handleShareSelection} />
                   </View>
                 </View>
@@ -1510,7 +1501,7 @@ function renderInline(
       )}
 
       {loadBarVisible && (
-        <View style={[loadBarStyles.track, { backgroundColor: isDark ? 'transparent' : t.darkOutline }]}>
+        <View style={[loadBarStyles.track, { backgroundColor: isDark ? Colors.transparent : t.darkOutline }]}>
           <Animated.View style={[
             loadBarStyles.fill,
             { backgroundColor: isDark ? t.darkerBackgroundColor : t.fontColorPrimary },
@@ -1523,8 +1514,8 @@ function renderInline(
 }
 
 const loadBarStyles = StyleSheet.create({
-  track: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 3, overflow: 'hidden' },
-  fill: { position: 'absolute', left: 0, right: 0, height: 3 },
+  track: { position: 'absolute', left: 0, right: 0, bottom: 0, height: BorderWidth.lg, overflow: 'hidden' },
+  fill: { position: 'absolute', left: 0, right: 0, height: BorderWidth.lg },
 });
 
 function createStyles(t: ReturnType<typeof useThemeColors>, isDark: boolean) {
@@ -1552,39 +1543,6 @@ function createStyles(t: ReturnType<typeof useThemeColors>, isDark: boolean) {
     left: 0,
     right: 0,
     zIndex: 10,
-    backgroundColor: t.darkerBackgroundColor,
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-  },
-  navRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  navLeft: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  navMeta: {
-    flex: 1,
-    gap: 2,
-  },
-  navChapter: {
-    fontFamily: 'NotoSans_500Medium',
-    fontSize: 12,
-    color: t.fontColorGray,
-  },
-  navSection: {
-    fontFamily: 'NotoSans_700Bold',
-    fontSize: 14,
-    color: t.fontColorPrimary,
-  },
-  // Title-only nav bar (no subtitle) uses body-s-regular instead of the bold title style.
-  navSectionOnly: {
-    fontFamily: UIFonts.bodySRegular.fontFamily,
-    fontSize: UIFonts.bodySRegular.fontSize,
   },
 
   // Content
@@ -1593,58 +1551,48 @@ function createStyles(t: ReturnType<typeof useThemeColors>, isDark: boolean) {
     backgroundColor: t.backgroundColor,
   },
   content: {
-    paddingHorizontal: 24,
-    paddingBottom: 60,
+    paddingHorizontal: Spacing[24],
+    paddingBottom: Spacing[56],
   },
 
-  // Block styles — all Lora, color textPrimary
+  // Block styles — all Lora (BookFonts), color textPrimary
   bookHeading: {
-    fontFamily: 'Lora_700Bold',
-    fontSize: 26,
+    ...BookFonts.titleXlBold,
     color: t.fontColorPrimary,
   },
   partHeading: {
-    fontFamily: 'Lora_600SemiBold',
-    fontSize: 20,
+    ...BookFonts.titleMdSemibold,
     color: t.fontColorPrimary,
   },
   chapterNumber: {
-    fontFamily: 'Lora_600SemiBold',
-    fontSize: 20,
+    ...BookFonts.titleMdSemibold,
     color: t.fontColorPrimary,
   },
   chapterHeading: {
-    fontFamily: 'Lora_700Bold',
-    fontSize: 22,
+    ...BookFonts.titleLgBold,
     color: t.fontColorPrimary,
   },
   sectionHeading: {
-    fontFamily: 'Lora_600SemiBold',
-    fontSize: 20,
+    ...BookFonts.titleMdSemibold,
     color: t.fontColorPrimary,
   },
   lessonSetSubtitle: {
-    fontFamily: 'Lora_700Bold',
-    fontSize: 22,
+    ...BookFonts.titleLgBold,
     color: t.fontColorPrimary,
   },
   lessonTitle: {
-    fontFamily: 'Lora_600SemiBold',
-    fontSize: 20,
+    ...BookFonts.titleMdSemibold,
     color: t.fontColorPrimary,
   },
   lessonSubtitle: {
-    fontFamily: 'Lora_700Bold',
-    fontSize: 22,
+    ...BookFonts.titleLgBold,
     color: t.fontColorPrimary,
   },
   stanzaBlock: {
-    marginHorizontal: 20,
+    marginHorizontal: Spacing[20],
   },
   bodyLarge: {
-    fontFamily: 'Lora_400Regular',
-    fontSize: 17,
-    lineHeight: 32,
+    ...BookFonts.bodyMdRegular,
     color: t.fontColorPrimary,
   },
   italic: {
@@ -1675,69 +1623,66 @@ function createStyles(t: ReturnType<typeof useThemeColors>, isDark: boolean) {
   },
   sheetContainer: {
     backgroundColor: t.darkerBackgroundColor,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 8,
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
+    paddingHorizontal: Spacing[24],
+    paddingTop: Spacing[16],
+    paddingBottom: Spacing[8],
   },
   sheetHandle: {
     width: 36,
     height: 4,
     backgroundColor: t.darkOutline,
-    borderRadius: 2,
+    borderRadius: Radius.sm,
     alignSelf: 'center',
-    marginBottom: 20,
+    marginBottom: Spacing[20],
   },
   sheetLabel: {
-    fontFamily: 'Lora_600SemiBold',
-    fontSize: 17,
+    ...BookFonts.bodyMdSemibold,
     color: t.fontColorPrimary,
-    marginBottom: 12,
+    marginBottom: Spacing[12],
   },
   sheetTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 8,
-    marginBottom: 12,
+    gap: Spacing[8],
+    marginBottom: Spacing[12],
   },
   sheetTitleText: {
     flex: 1,
-    marginBottom: 0,
+    marginBottom: Spacing.none,
   },
   sheetText: {
-    fontFamily: 'Lora_400Regular_Italic',
-    fontSize: 15,
-    lineHeight: 23,
+    ...BookFonts.bodySmRegularItalic,
     color: t.fontColorPrimary,
-    marginBottom: 16,
+    marginBottom: Spacing[16],
   },
 
   // Reader tools drawer
   toolsDrawerContainer: {
     backgroundColor: t.darkerBackgroundColor,
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 12,
+    borderTopLeftRadius: Radius.lg,
+    borderTopRightRadius: Radius.lg,
+    paddingHorizontal: Spacing[16],
+    paddingTop: Spacing[8],
+    paddingBottom: Spacing[12],
   },
   toolsDrawerHandleWrap: {
     alignItems: 'center',
-    paddingVertical: 8,
-    marginBottom: 4,
+    paddingVertical: Spacing[8],
+    marginBottom: Spacing[4],
   },
   toolsDrawerHandle: {
     width: 60,
     height: 6,
     backgroundColor: t.darkOutline,
-    borderRadius: 3,
+    borderRadius: Radius.sm,
   },
   toolsDrawerRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 12,
+    gap: Spacing[8],
+    marginBottom: Spacing[12],
   },
   toolsDrawerButton: {
     flex: 1,
@@ -1746,29 +1691,28 @@ function createStyles(t: ReturnType<typeof useThemeColors>, isDark: boolean) {
   // Save-verses drawer
   saveDrawerContainer: {
     backgroundColor: t.darkerBackgroundColor,
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
-    paddingHorizontal: 16,
-    paddingTop: 8,
+    borderTopLeftRadius: Radius.lg,
+    borderTopRightRadius: Radius.lg,
+    paddingHorizontal: Spacing[16],
+    paddingTop: Spacing[8],
   },
   saveDrawerTitle: {
-    fontFamily: 'NotoSans_500Medium',
-    fontSize: 16,
+    ...UIFonts.bodySRegular,
     textAlign: 'center',
-    marginBottom: 12,
+    marginBottom: Spacing[12],
   },
   saveDrawerNoteInputWrap: {
-    marginBottom: 12,
+    marginBottom: Spacing[12],
   },
   saveDrawerFullBleed: {
     flex: 1,
-    marginHorizontal: -16,
+    marginHorizontal: -Spacing[16],
     backgroundColor: t.backgroundColor,
   },
   saveDrawerListHeader: {
-    paddingTop: 24,
-    paddingBottom: 12,
-    paddingHorizontal: 24,
+    paddingTop: Spacing[24],
+    paddingBottom: Spacing[12],
+    paddingHorizontal: Spacing[24],
   },
   saveDrawerListHeaderText: UIFonts.capsBodyXsRegular,
   saveDrawerList: {
@@ -1777,7 +1721,7 @@ function createStyles(t: ReturnType<typeof useThemeColors>, isDark: boolean) {
 
   // Next-chapter button
   nextChapterContainer: {
-    marginTop: 60,
+    marginTop: Spacing[56],
   },
   // Bar always renders on a fixed white background (Figma: primary-button-bg,
   // same value in both themes), so its text color is fixed to the light-mode
@@ -1785,20 +1729,19 @@ function createStyles(t: ReturnType<typeof useThemeColors>, isDark: boolean) {
   // dark mode flips it to white-on-white and the label disappears.
   nextChapterBtn: {
     overflow: 'hidden',
-    backgroundColor: Colors.primaryButtonBg,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: Colors.darkOutline,
-    paddingHorizontal: 24,
-    paddingVertical: 14,
+    backgroundColor: Colors.neutral100,
+    borderRadius: Radius.lg,
+    borderWidth: BorderWidth.md,
+    borderColor: Colors.brand400,
+    paddingHorizontal: Spacing[24],
+    paddingVertical: Spacing[12],
     alignItems: 'center',
     justifyContent: 'center',
   },
   nextChapterBtnPressed: {},
   nextChapterLabel: {
-    fontFamily: 'NotoSans_500Medium',
-    fontSize: 16,
-    color: Colors.fontColorPrimary,
+    ...UIFonts.bodySRegular,
+    color: Colors.ink100,
   },
 
   });

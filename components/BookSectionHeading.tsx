@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet } from 'react-native';
 import { useThemeColors } from '@/utils/theme';
 import { UIFonts } from '@/constants/Typography';
+import { Spacing } from '@/constants/Tokens';
 
 type Props = {
   label: string;
@@ -20,9 +21,9 @@ export function BookSectionHeading({ label }: Props) {
 
 const styles = StyleSheet.create({
   container: {
-    paddingTop: 32,
-    paddingBottom: 12,
-    paddingHorizontal: 24,
+    paddingTop: Spacing[32],
+    paddingBottom: Spacing[12],
+    paddingHorizontal: Spacing[24],
   },
-  label: UIFonts.capsBodyXsBold,
+  label: UIFonts.capsBodyXsSemibold,
 });

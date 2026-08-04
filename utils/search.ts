@@ -205,6 +205,16 @@ export function formatRouteId(result: SearchResult): string {
   }
 }
 
+/**
+ * Nearest heading title above a result: section title (Text/Manual/Psychotherapy/
+ * Song), else lesson subtitle (Workbook), else chapter/heading title — whichever
+ * of these the indexer set for that row. Gives search results context beyond
+ * the bare citation.
+ */
+export function nearestTitle(result: SearchResult): string | null {
+  return result.sectionTitle ?? result.lessonTitle ?? result.chapterTitle;
+}
+
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 
 function getDb(): Promise<SQLite.SQLiteDatabase> {

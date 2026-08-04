@@ -4,14 +4,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router, useFocusEffect } from 'expo-router';
 import { RipplePressable } from '@/components/RipplePressable';
-import { TertiaryButton } from '@/components/TertiaryButton';
 import { SearchBar } from '@/components/SearchBar';
-import { BackIcon } from '@/components/Icons';
+import { NavBar } from '@/components/NavBar';
 import { BookSectionHeading } from '@/components/BookSectionHeading';
 import { AppScrollView } from '@/components/AppScrollView';
 import { useTheme, useThemeColors } from '@/utils/theme';
 import { UIFonts } from '@/constants/Typography';
-import { searchContent, formatRouteId, splitSnippet, truncateSnippetSegments, SearchResult } from '@/utils/search';
+import { Colors } from '@/constants/Colors';
+import { Spacing, BorderWidth } from '@/constants/Tokens';
+import { searchContent, formatRouteId, nearestTitle, splitSnippet, truncateSnippetSegments, SearchResult } from '@/utils/search';
 
 // No pagination — every match is fetched in one query. The corpus is only
 // ~5,000 rows total and FTS5 is an indexed lookup (not a scan), so this stays
@@ -123,24 +124,17 @@ export default function SearchScreen() {
     <SafeAreaView style={[styles.topArea, { backgroundColor: t.darkerBackgroundColor }]} edges={['top']}>
       <SafeAreaView style={[styles.container, { backgroundColor: t.backgroundColor }]} edges={['bottom']}>
         <StatusBar style={isDark ? 'light' : 'dark'} backgroundColor={t.darkerBackgroundColor} />
-        <View style={[styles.navBar, { backgroundColor: t.darkerBackgroundColor }]}>
-          <View style={styles.navRow}>
-            <TertiaryButton hitSize={40} onPress={() => router.back()}>
-              {(pressed) => <BackIcon size={16} color={pressed ? t.pressedIconColor : t.fontColorPrimary} />}
-            </TertiaryButton>
-            <View style={styles.navSearchBar}>
-              <SearchBar
-                value={query}
-                onChangeText={setQuery}
-                onSubmit={handleSearch}
-                onClear={handleClearSearch}
-                searched={submittedQuery.length > 0 && query === submittedQuery}
-                placeholder="Buscar"
-                autoFocus
-              />
-            </View>
-          </View>
-        </View>
+        <NavBar onBack={() => router.back()}>
+          <SearchBar
+            value={query}
+            onChangeText={setQuery}
+            onSubmit={handleSearch}
+            onClear={handleClearSearch}
+            searched={submittedQuery.length > 0 && query === submittedQuery}
+            placeholder="Buscar"
+            autoFocus
+          />
+        </NavBar>
 
         <AppScrollView
           contentContainerStyle={styles.content}
@@ -166,6 +160,7 @@ export default function SearchScreen() {
               <BookSectionHeading label={group.title} />
               {group.items.map((result, idx) => {
                 const segments = truncateSnippetSegments(splitSnippet(result.snippet), EXCERPT_MAX_CHARS);
+                const title = nearestTitle(result);
                 return (
                   <RipplePressable
                     key={`${result.anchor}-${result.paragraph}-${idx}`}
@@ -177,7 +172,9 @@ export default function SearchScreen() {
                       <>
                         <View style={styles.itemRow}>
                           <View style={styles.itemText}>
-                            <Text style={[styles.itemLabel, { color: t.fontColorPrimary }]}>{formatRouteId(result)}</Text>
+                            <Text style={[styles.itemLabel, { color: t.fontColorPrimary }]}>
+                              {title ? `${title} - ${formatRouteId(result)}` : formatRouteId(result)}
+                            </Text>
                             <Text style={[styles.itemSubtitle, { color: t.fontColorGray }]}>
                               {segments.map((seg, i) => (
                                 <Text key={i} style={seg.highlighted ? styles.itemSubtitleBold : undefined}>
@@ -198,7 +195,7 @@ export default function SearchScreen() {
         </AppScrollView>
 
         {loadBarVisible && (
-          <View style={[styles.loadBarTrack, { backgroundColor: isDark ? 'transparent' : t.darkOutline }]}>
+          <View style={[styles.loadBarTrack, { backgroundColor: isDark ? Colors.transparent : t.darkOutline }]}>
             <Animated.View style={[
               styles.loadBarFill,
               { backgroundColor: isDark ? t.darkerBackgroundColor : t.fontColorPrimary },
@@ -214,22 +211,19 @@ export default function SearchScreen() {
 const styles = StyleSheet.create({
   topArea: { flex: 1 },
   container: { flex: 1 },
-  navBar: { paddingHorizontal: 24, paddingVertical: 10 },
-  navRow: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  navSearchBar: { flex: 1 },
   scrollView: { flex: 1 },
-  content: { paddingBottom: 40 },
-  headerItem: { paddingTop: 24, paddingBottom: 12, paddingHorizontal: 24 },
+  content: { paddingBottom: Spacing[40] },
+  headerItem: { paddingTop: Spacing[24], paddingBottom: Spacing[12], paddingHorizontal: Spacing[24] },
   titleL1: UIFonts.capsBodyXsRegular,
-  emptyState: { paddingHorizontal: 24, paddingTop: 12 },
-  emptyText: { fontFamily: 'NotoSans_500Medium', fontSize: 14 },
-  item: { overflow: 'hidden', paddingLeft: 24, paddingRight: 24, paddingTop: 14, gap: 14 },
-  itemRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  itemText: { flex: 1, gap: 2 },
-  itemLabel: { fontFamily: 'NotoSans_500Medium', fontSize: 14 },
-  itemSubtitle: { fontFamily: 'NotoSans_500Medium', fontSize: 12 },
-  itemSubtitleBold: { fontFamily: 'NotoSans_700Bold' },
-  divider: { height: 2 },
-  loadBarTrack: { height: 3, overflow: 'hidden' },
-  loadBarFill: { position: 'absolute', left: 0, right: 0, height: 3 },
+  emptyState: { paddingHorizontal: Spacing[24], paddingTop: Spacing[12] },
+  emptyText: { ...UIFonts.bodyXsRegular },
+  item: { overflow: 'hidden', paddingLeft: Spacing[24], paddingRight: Spacing[24], paddingTop: Spacing[12], gap: Spacing[12] },
+  itemRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing[12] },
+  itemText: { flex: 1, gap: Spacing[2] },
+  itemLabel: { ...UIFonts.bodyXsRegular },
+  itemSubtitle: { ...UIFonts.body2xsRegular },
+  itemSubtitleBold: { fontFamily: UIFonts.body2xsBold.fontFamily },
+  divider: { height: BorderWidth.sm },
+  loadBarTrack: { height: BorderWidth.lg, overflow: 'hidden' },
+  loadBarFill: { position: 'absolute', left: 0, right: 0, height: BorderWidth.lg },
 });

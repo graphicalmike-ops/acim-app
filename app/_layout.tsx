@@ -16,7 +16,9 @@ import {
   Lora_700Bold_Italic,
 } from '@expo-google-fonts/lora';
 import {
+  NotoSans_400Regular,
   NotoSans_500Medium,
+  NotoSans_600SemiBold,
   NotoSans_700Bold,
 } from '@expo-google-fonts/noto-sans';
 import * as SplashScreen from 'expo-splash-screen';
@@ -42,7 +44,9 @@ export default function RootLayout() {
     Lora_600SemiBold,
     Lora_700Bold,
     Lora_700Bold_Italic,
+    NotoSans_400Regular,
     NotoSans_500Medium,
+    NotoSans_600SemiBold,
     NotoSans_700Bold,
   });
 
@@ -68,7 +72,7 @@ export default function RootLayout() {
           <Stack.Screen name="search" options={{ animation: 'fade' }} />
           <Stack.Screen name="reader" options={{ animation: 'fade' }} />
         </Stack>
-        <StatusBar style="dark" backgroundColor={Colors.darkerBackgroundColor} />
+        <StatusBar style="dark" backgroundColor={Colors.brand100} />
       </BookmarksProvider>
     </ThemeProvider>
   );

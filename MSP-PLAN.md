@@ -238,3 +238,10 @@ splitting the 78KB file + memoizing block renderers (React Compiler helps but si
 - **NativeWind v4 vs v5** vs reanimated 4 — resolve via RNR `doctor` before mass migration.
 - **Theme bridge** is the core mismatch — wire `colorScheme.set()` correctly before migrating screens.
 - Preserve the two `metro.config.js` `assetExts` lines and the theme-fixed components' white behavior.
+- **HARD CONSTRAINT — never break existing users' saved verses/notes.** The app is live with real
+  users who have data in `AsyncStorage` under `acim_bookmarks` (`SavedBookmark[]`: `verses`, `notation`,
+  `name`, `note`, `bookId`, `anchor`, `paragraph`). Any Step 4 redesign/refactor touching the bookmarks
+  screen, reader saved-verse highlighting/note sheet, or the storage layer itself must not rename the
+  key, change the shape in a breaking way, or assume all stored records match the current shape (there's
+  already precedent for old records missing newer fields degrading gracefully, not erroring — keep that
+  pattern). Verify against real pre-existing saved data before signing off, not just a fresh install.
