@@ -47,16 +47,22 @@ function NavigationBarSync() {
 }
 
 export default function RootLayout() {
+  // Splash screen only blocks on the fonts Home actually renders with —
+  // the rest (mostly used deeper in the Reader) load in the background
+  // below so a rarely-needed weight can't hold up first paint.
   const [fontsLoaded, fontError] = useFonts({
-    Lora_400Regular,
-    Lora_400Regular_Italic,
     Lora_500Medium,
-    Lora_600SemiBold,
-    Lora_700Bold,
-    Lora_700Bold_Italic,
     NotoSans_400Regular,
     NotoSans_500Medium,
     NotoSans_600SemiBold,
+  });
+
+  useFonts({
+    Lora_400Regular,
+    Lora_400Regular_Italic,
+    Lora_600SemiBold,
+    Lora_700Bold,
+    Lora_700Bold_Italic,
     NotoSans_700Bold,
   });
 

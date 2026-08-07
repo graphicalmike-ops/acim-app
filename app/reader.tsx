@@ -1918,8 +1918,8 @@ function createStyles(t: ReturnType<typeof useThemeColors>, isDark: boolean) {
     marginBottom: Spacing[20],
   },
   ntSheetHandle: {
-    width: 60,
-    height: 6,
+    width: Spacing[64],
+    height: Spacing[6],
     borderRadius: Radius.sm,
     backgroundColor: isDark ? Colors.gold100 : Colors.brand400,
   },
@@ -1986,8 +1986,8 @@ function createStyles(t: ReturnType<typeof useThemeColors>, isDark: boolean) {
     alignItems: 'center',
   },
   drawerHandle: {
-    width: 60,
-    height: 6,
+    width: Spacing[64],
+    height: Spacing[6],
     borderRadius: Radius.sm,
     backgroundColor: isDark ? Colors.gold100 : Colors.brand400,
   },

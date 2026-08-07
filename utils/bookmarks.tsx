@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export type BookId = 'theory' | 'workbook' | 'mft' | 'supplement';
@@ -78,8 +78,13 @@ export function BookmarksProvider({ children }: { children: ReactNode }) {
     AsyncStorage.removeItem(KEY).catch(() => {});
   }, []);
 
+  const value = useMemo(
+    () => ({ bookmarks, addBookmark, deleteBookmark, clearAllBookmarks }),
+    [bookmarks, addBookmark, deleteBookmark, clearAllBookmarks]
+  );
+
   return (
-    <BookmarksContext.Provider value={{ bookmarks, addBookmark, deleteBookmark, clearAllBookmarks }}>
+    <BookmarksContext.Provider value={value}>
       {children}
     </BookmarksContext.Provider>
   );
