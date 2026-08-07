@@ -3,36 +3,113 @@ import { View, Text, ScrollView, StyleSheet, LayoutChangeEvent, useWindowDimensi
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
-import { MenuView } from '@react-native-menu/menu';
-import { ActionsIcon } from '@/components/Icons';
-import { TertiaryButton } from '@/components/TertiaryButton';
+import { UIMenu } from '@/components/UIMenu';
+import { ConfirmDialog, ConfirmDialogContent } from '@/components/ConfirmDialog';
 import { NavBar } from '@/components/NavBar';
 import { ReaderToolButton } from '@/components/ReaderToolButton';
-import { NoteInput } from '@/components/NoteInput';
-import { SavedItemRow } from '@/components/SavedItemRow';
-import { toTitleCase } from '@/utils/text';
+import { TextInputField } from '@/components/ui/text-input';
+import { IconButton } from '@/components/ui/icon-button';
+import { PlusIcon } from '@/components/Icons';
+import { SavedItem, useSavedRowColors } from '@/components/ui/saved-item';
+import { Button } from '@/components/ui/button';
+import { Text as ButtonText } from '@/components/ui/text';
+import { IndexTitleL1 } from '@/components/ui/index-item';
+import { LoadingBar } from '@/components/ui/loading-bar';
+import { toTitleCase, formatSavedDate } from '@/utils/text';
 import { saveLastRead } from '@/utils/lastRead';
-import { RipplePressable } from '@/components/RipplePressable';
 import { AppScrollView } from '@/components/AppScrollView';
 import { useTheme, useThemeColors } from '@/utils/theme';
 import { splitQueryTerms, normalizeForMatch, formatRouteId, SearchResult } from '@/utils/search';
 import { Colors } from '@/constants/Colors';
-import { Radius, BorderWidth, Spacing } from '@/constants/Tokens';
+import { Radius, Spacing, Shadows } from '@/constants/Tokens';
 import { UIFonts, BookFonts } from '@/constants/Typography';
 import { Sentence, ContentBlock, CONTENT, resolveContentKey, getVersesText } from '@/utils/content';
 import { useBookmarks, BookId as SavedBookId, bookmarkHref, SavedBookmark } from '@/utils/bookmarks';
 
 const NO_HIGHLIGHT_TERMS: string[] = [];
 
+// Android's native text-selection (long-press handles + magnifier + copy
+// menu, enabled by RN Text's `selectable` prop) fires on the same gesture as
+// this screen's own verse-selection (handleVersePress, tap-driven) and the
+// two fight over the touch — so `selectable` is only turned on outside
+// Android. iOS's native selection doesn't intercept taps the same way, so it
+// coexists with the custom selection fine.
+const nativeTextSelectable = Platform.OS !== 'android';
+
 // The toolbar drawer's tools-only ("peek") content height — computed from its
-// own fixed styling (toolsDrawerContainer padding 8+12, toolsDrawerHandleWrap
-// padding 8*2+margin 4, handle 6, and a single ReaderToolButton row's known
-// 63px height) rather than measured via onLayout, since a post-mount
-// measurement correction was visibly snapping the drawer right after its
-// open animation finished. The device's bottom safe-area inset (Android's
-// gesture/button nav bar) is added on top of this at the call site, since
-// SafeAreaView's own bottom padding would otherwise eat into this budget.
-const TOOLBAR_PEEK_CONTENT_HEIGHT = 109;
+// own fixed styling (drawerHeader paddingTop 8 + handle row 6 + gap 12 +
+// button row 43 (toolDrawer Button: py-3*2=24 + text lineHeight 19) +
+// paddingBottom 12 = 81, matching Figma's "Tools" header frame height
+// exactly) rather than measured via onLayout, since a post-mount measurement
+// correction was visibly snapping the drawer right after its open animation
+// finished. The device's bottom safe-area inset (Android's gesture/button
+// nav bar) is added on top of this at the call site, since SafeAreaView's
+// own bottom padding would otherwise eat into this budget.
+const TOOLBAR_PEEK_CONTENT_HEIGHT = 81;
+
+// User-requested on-top adjustment: pulls the toolbar drawer's resting top
+// edge 12px closer to the top of the screen. Since the drawer is pinned to
+// the bottom edge (styles.sheetSlide) with no top/translateY-to-a-fixed-
+// position logic, its top edge is purely a function of its rendered height —
+// so growing that height by Spacing[12] pushes the top edge up by exactly
+// Spacing[12]. Kept separate from TOOLBAR_PEEK_CONTENT_HEIGHT (rather than
+// folded into it) so that constant's own comment can keep asserting an exact
+// Figma match, same pattern as RECENT_SAVES_TITLE_HEIGHT below.
+const TOOLBAR_DRAWER_TOP_ADJUSTMENT = Spacing[12];
+
+// Extra height added on top of the save-mode drawer's default (75%-screen,
+// non-dragged) resting height so the "Guardados recientes" section title is
+// visible without the user needing to drag the drawer open first — same
+// derive-from-fixed-styling approach as TOOLBAR_PEEK_CONTENT_HEIGHT above
+// (not measured via onLayout, for the same post-mount-snap reason). Matches
+// IndexTitleL1's own styling (components/ui/index-item.tsx: paddingTop 32 +
+// UIFonts.capsBodyXsSemibold lineHeight 19 + paddingBottom 12 = 63).
+const RECENT_SAVES_TITLE_HEIGHT = 63;
+
+// Downward drag distance (px) past which any of the sheets/drawers below
+// dismiss instead of springing back to rest. Shared by drawerPanResponder
+// (defined inside ReaderScreen, since it also needs the drag-up-to-expand
+// state that lives on component refs) and createSheetPanResponder below.
+const DRAWER_CLOSE_THRESHOLD = 100;
+
+// Caps how many Reader screens can stack on top of each other via in-Reader
+// jumps (the recent-saves drawer below — "next chapter" already replaces,
+// so it never stacks and isn't part of this). Tracked via a `chain` route
+// param (not component/module state, since each jump is a fresh Reader
+// mount) rather than a plain "always replace" — this keeps normal 1-2-jump
+// back history fully intact (matches today's behavior exactly) and only
+// starts capping once a user chains MAX_READER_CHAIN_DEPTH jumps in a row
+// without ever navigating away via Back/Home. Entering Reader from a list
+// screen (Contents/Search/Bookmarks/Home) never sets `chain`, so it's
+// treated as depth 1 — a fresh chain.
+const MAX_READER_CHAIN_DEPTH = 3;
+
+// Drag-to-dismiss for the N.T. and highlighted-verse sheets — the same
+// fraction/threshold drag behavior as drawerPanResponder's own no-expand
+// (plain downward-drag) branch, minus the drawer's extra-height (drag-up-to-
+// expand) behavior, since these two sheets are fixed-height and only ever
+// dismiss, never expand. `onStartShouldSetPanResponder` never claims on
+// touch-down (only via onMoveShouldSetPanResponder, once real vertical drag
+// distance is seen) so a plain tap on any interactive child (e.g. the
+// highlighted-verse sheet's UIMenu actions button) is never contested —
+// same fix as drawerPanResponder's own onStartShouldSetPanResponder below.
+function createSheetPanResponder(anim: Animated.Value, onDismiss: () => void) {
+  return PanResponder.create({
+    onStartShouldSetPanResponder: () => false,
+    onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dy) > 4 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
+    onPanResponderMove: (_, gesture) => {
+      const fraction = Math.max(0, Math.min(1, 1 - gesture.dy / 500));
+      anim.setValue(fraction);
+    },
+    onPanResponderRelease: (_, gesture) => {
+      if (gesture.dy > DRAWER_CLOSE_THRESHOLD) onDismiss();
+      else Animated.spring(anim, { toValue: 1, useNativeDriver: true }).start();
+    },
+    onPanResponderTerminate: () => {
+      Animated.spring(anim, { toValue: 1, useNativeDriver: true }).start();
+    },
+  });
+}
 
 const BOOK_SEQUENCES: Record<string, string[]> = {
   theory: [
@@ -65,19 +142,27 @@ const BOOK_SEQUENCES: Record<string, string[]> = {
 };
 
 function getMarginTop(type: string, prevType: string | null, isFirst: boolean): number {
+  // First block on the page — flush distance below the nav bar, independent
+  // of block type (content's own scroll padding already matches the nav
+  // bar's height exactly, so this is the only source of that gap).
+  if (isFirst) return 20;
   if (type === 'book-heading')        return 40;
-  if (type === 'part-heading')        return (isFirst || prevType === 'book-heading') ? 40 : 80;
-  if (type === 'lesson-group-heading') return isFirst ? 40 : 80;
-  if (type === 'chapter-heading')     { if (prevType === 'part-heading' || prevType === 'lesson-set-heading' || prevType === 'lesson-group-heading') return 4; return (isFirst || prevType === 'book-heading') ? 40 : 80; }
+  if (type === 'part-heading')        return prevType === 'book-heading' ? 40 : 80;
+  if (type === 'lesson-group-heading') return 80;
+  if (type === 'chapter-heading')     { if (prevType === 'part-heading' || prevType === 'lesson-set-heading' || prevType === 'lesson-group-heading') return 4; return prevType === 'book-heading' ? 40 : 80; }
   if (type === 'section-heading')     return 40;
-  if (type === 'lesson-set-heading')  return isFirst ? 40 : 80;
-  if (type === 'lesson-heading')      return isFirst ? 40 : 80;
+  if (type === 'lesson-set-heading')  return 80;
+  if (type === 'lesson-heading')      return 80;
   if (prevType === 'lesson-heading' || prevType === 'chapter-heading' || prevType === 'lesson-group-heading')  return 40;
   return 20;
 }
 
 export default function ReaderScreen() {
-  const { book: bookId, anchor, paragraph: paragraphParam, q: searchQuery, verses: versesParam } = useLocalSearchParams<{ book: string; anchor: string; paragraph?: string; q?: string; verses?: string }>();
+  const { book: bookId, anchor, paragraph: paragraphParam, q: searchQuery, verses: versesParam, chain: chainParam } = useLocalSearchParams<{ book: string; anchor: string; paragraph?: string; q?: string; verses?: string; chain?: string }>();
+  // How many Reader-to-Reader jumps deep the *current* screen already is —
+  // see MAX_READER_CHAIN_DEPTH above. Missing/invalid means this Reader was
+  // reached fresh from a list screen, i.e. depth 1.
+  const chainDepth = Number(chainParam) || 1;
   const highlightTerms = useMemo(
     () => (searchQuery ? splitQueryTerms(searchQuery).map(normalizeForMatch) : NO_HIGHLIGHT_TERMS),
     [searchQuery]
@@ -86,6 +171,7 @@ export default function ReaderScreen() {
   const { top: topInset, bottom: bottomInset } = useSafeAreaInsets();
   const { isDark } = useTheme();
   const t = useThemeColors();
+  const { iconColor: savedRowIconColor } = useSavedRowColors();
   const styles = useMemo(() => createStyles(t, isDark), [t, isDark]);
   const scrollRef = useRef<ScrollView>(null);
   const [navigating, setNavigating] = useState(false);
@@ -115,44 +201,29 @@ export default function ReaderScreen() {
   const [scrolledSectionBlock, setScrolledSectionBlock] = useState<ContentBlock | null>(null);
   const [ntSheet, setNtSheet] = useState<{ word: string; note: string } | null>(null);
   const sheetAnim = useRef(new Animated.Value(0)).current;
-  const openNtSheet = useCallback((word: string, note: string) => {
-    sheetAnim.setValue(0);
-    setNtSheet({ word, note });
-    requestAnimationFrame(() => {
-      Animated.timing(sheetAnim, { toValue: 1, duration: 260, useNativeDriver: true }).start();
-    });
-  }, [sheetAnim]);
-
-  const closeNtSheet = useCallback(() => {
-    Animated.timing(sheetAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => {
-      setNtSheet(null);
-    });
-  }, [sheetAnim]);
+  // Ref-mirror of ntSheet (same pattern as drawerModeRef below) — lets
+  // closeOtherOverlays check "is this currently open" without needing ntSheet
+  // itself in its dependency array, which would otherwise churn
+  // closeOtherOverlays' identity (and, transitively, openNtSheet/
+  // openSavedNoteSheet/openDrawer's) on every open/close.
+  const ntSheetRef = useRef<{ word: string; note: string } | null>(null);
+  useEffect(() => { ntSheetRef.current = ntSheet; }, [ntSheet]);
 
   // Tapping an already-saved (yellow-highlighted) verse opens this sheet
   // instead of toggling selection — a read-only peek at the saved note,
-  // reusing the N.T. sheet's own visuals via the shared sheet* styles.
+  // restyled to match the N.T. sheet's own visuals (see savedNoteSheet JSX).
   const [savedNoteSheet, setSavedNoteSheet] = useState<SavedBookmark | null>(null);
   const savedNoteSheetAnim = useRef(new Animated.Value(0)).current;
-  const openSavedNoteSheet = useCallback((bookmark: SavedBookmark) => {
-    savedNoteSheetAnim.setValue(0);
-    setSavedNoteSheet(bookmark);
-    requestAnimationFrame(() => {
-      Animated.timing(savedNoteSheetAnim, { toValue: 1, duration: 260, useNativeDriver: true }).start();
-    });
-  }, [savedNoteSheetAnim]);
-
-  const closeSavedNoteSheet = useCallback(() => {
-    Animated.timing(savedNoteSheetAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => {
-      setSavedNoteSheet(null);
-    });
-  }, [savedNoteSheetAnim]);
+  const savedNoteSheetRef = useRef<SavedBookmark | null>(null);
+  useEffect(() => { savedNoteSheetRef.current = savedNoteSheet; }, [savedNoteSheet]);
 
   // Verse selection (for bookmarking): verses are keyed as `${blockKey}:${sentenceIndex}`.
   const [selectedVerses, setSelectedVerses] = useState<Set<string>>(new Set());
   const selectedVersesRef = useRef<Set<string>>(new Set());
   const verseBlockLayouts = useRef<Map<number, { y: number; height: number }>>(new Map());
   const [drawerVisible, setDrawerVisible] = useState(false);
+  const drawerVisibleRef = useRef(false);
+  useEffect(() => { drawerVisibleRef.current = drawerVisible; }, [drawerVisible]);
   const [drawerMode, setDrawerMode] = useState<'toolbar' | 'save'>('toolbar');
   const drawerModeRef = useRef(drawerMode);
   useEffect(() => { drawerModeRef.current = drawerMode; }, [drawerMode]);
@@ -175,6 +246,75 @@ export default function ReaderScreen() {
   const lastTouchYRef = useRef(0);
   const { bookmarks, addBookmark, deleteBookmark } = useBookmarks();
 
+  const closeNtSheet = useCallback(() => {
+    Animated.timing(sheetAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => {
+      setNtSheet(null);
+    });
+  }, [sheetAnim]);
+
+  const closeSavedNoteSheet = useCallback(() => {
+    Animated.timing(savedNoteSheetAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => {
+      setSavedNoteSheet(null);
+    });
+  }, [savedNoteSheetAnim]);
+
+  const closeDrawer = useCallback(() => {
+    Animated.timing(drawerAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => {
+      setDrawerVisible(false);
+      setDrawerMode('toolbar');
+      setNoteText('');
+      setDrawerExtraHeight(0);
+    });
+  }, [drawerAnim, setDrawerExtraHeight]);
+
+  const clearVerseSelection = useCallback(() => {
+    selectedVersesRef.current = new Set();
+    setSelectedVerses(new Set());
+    closeDrawer();
+  }, [closeDrawer]);
+
+  // Only one of the three overlays (N.T. note, saved-verse note, verse-
+  // selection/save drawer) may be visible at a time. Each open* function
+  // below calls this first, so opening any one closes the other two. The
+  // drawer is dismissed via clearVerseSelection (not closeDrawer alone) so
+  // selectedVerses never sits non-empty while drawerVisible is false — that
+  // would desync toggleVerse's own open/close logic. Reads current
+  // visibility off the *Ref mirrors (not the state values themselves) so
+  // this stays referentially stable — see ntSheetRef/savedNoteSheetRef/
+  // drawerVisibleRef above.
+  const closeOtherOverlays = useCallback((keep: 'nt' | 'saved' | 'drawer') => {
+    if (keep !== 'nt' && ntSheetRef.current) closeNtSheet();
+    if (keep !== 'saved' && savedNoteSheetRef.current) closeSavedNoteSheet();
+    if (keep !== 'drawer' && drawerVisibleRef.current) clearVerseSelection();
+  }, [closeNtSheet, closeSavedNoteSheet, clearVerseSelection]);
+
+  const openNtSheet = useCallback((word: string, note: string) => {
+    closeOtherOverlays('nt');
+    sheetAnim.setValue(0);
+    setNtSheet({ word, note });
+    requestAnimationFrame(() => {
+      Animated.timing(sheetAnim, { toValue: 1, duration: 260, useNativeDriver: true }).start();
+    });
+  }, [sheetAnim, closeOtherOverlays]);
+
+  const openSavedNoteSheet = useCallback((bookmark: SavedBookmark) => {
+    closeOtherOverlays('saved');
+    savedNoteSheetAnim.setValue(0);
+    setSavedNoteSheet(bookmark);
+    requestAnimationFrame(() => {
+      Animated.timing(savedNoteSheetAnim, { toValue: 1, duration: 260, useNativeDriver: true }).start();
+    });
+  }, [savedNoteSheetAnim, closeOtherOverlays]);
+
+  const openDrawer = useCallback(() => {
+    closeOtherOverlays('drawer');
+    setDrawerExtraHeight(0);
+    setDrawerVisible(true);
+    requestAnimationFrame(() => {
+      Animated.timing(drawerAnim, { toValue: 1, duration: 260, useNativeDriver: true }).start();
+    });
+  }, [drawerAnim, setDrawerExtraHeight, closeOtherOverlays]);
+
   const handleShareSavedNote = useCallback(() => {
     if (!savedNoteSheet) return;
     const verseText = getVersesText(savedNoteSheet.bookId, savedNoteSheet.anchor, savedNoteSheet.paragraph, savedNoteSheet.verses ?? []);
@@ -189,22 +329,9 @@ export default function ReaderScreen() {
     closeSavedNoteSheet();
   }, [savedNoteSheet, deleteBookmark, closeSavedNoteSheet]);
 
-  const openDrawer = useCallback(() => {
-    setDrawerExtraHeight(0);
-    setDrawerVisible(true);
-    requestAnimationFrame(() => {
-      Animated.timing(drawerAnim, { toValue: 1, duration: 260, useNativeDriver: true }).start();
-    });
-  }, [drawerAnim, setDrawerExtraHeight]);
-
-  const closeDrawer = useCallback(() => {
-    Animated.timing(drawerAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => {
-      setDrawerVisible(false);
-      setDrawerMode('toolbar');
-      setNoteText('');
-      setDrawerExtraHeight(0);
-    });
-  }, [drawerAnim, setDrawerExtraHeight]);
+  // "Eliminar" in the saved-note sheet's UIMenu opens this confirm step
+  // instead of deleting straight away.
+  const [deleteNoteConfirmOpen, setDeleteNoteConfirmOpen] = useState(false);
 
   const toggleVerse = useCallback((verseKey: string) => {
     setSelectedVerses(prev => {
@@ -222,12 +349,6 @@ export default function ReaderScreen() {
     verseBlockLayouts.current.set(blockKey, { y: e.nativeEvent.layout.y, height: e.nativeEvent.layout.height });
   }, []);
 
-  const clearVerseSelection = useCallback(() => {
-    selectedVersesRef.current = new Set();
-    setSelectedVerses(new Set());
-    closeDrawer();
-  }, [closeDrawer]);
-
   // Returns from the save-verses drawer back to the selection-toolbar drawer
   // (verse selection stays intact) — used by both the hardware back button
   // and a downward drag past the threshold while in save mode.
@@ -244,8 +365,10 @@ export default function ReaderScreen() {
 
   // Resting ("peek") height of the toolbar drawer — content height plus the
   // device's bottom safe-area inset, so SafeAreaView's own inset padding
-  // doesn't eat into the tools' budget and get squeezed under the nav bar.
-  const toolbarBaseHeight = TOOLBAR_PEEK_CONTENT_HEIGHT + bottomInset;
+  // doesn't eat into the tools' budget and get squeezed under the nav bar —
+  // plus TOOLBAR_DRAWER_TOP_ADJUSTMENT to pull the drawer's top edge closer
+  // to the top of the screen per user request.
+  const toolbarBaseHeight = TOOLBAR_PEEK_CONTENT_HEIGHT + bottomInset + TOOLBAR_DRAWER_TOP_ADJUSTMENT;
 
   // The drag PanResponder below is created once via useRef and never
   // recreated, so its callbacks close over whatever these values were on
@@ -257,10 +380,17 @@ export default function ReaderScreen() {
   const screenHeightRef = useRef(screenHeight);
   const topInsetRef = useRef(topInset);
   const toolbarBaseHeightRef = useRef(toolbarBaseHeight);
+  // Same staleness concern as the three refs above — mirrors `bookmarks`
+  // (not the sorted `recentBookmarks` below, which would create a
+  // declaration-order problem; length is identical either way) so
+  // baseHeightFor('save') picks up bookmarks that finish loading from
+  // AsyncStorage after this component's first render.
+  const hasRecentBookmarksRef = useRef(bookmarks.length > 0);
   useEffect(() => {
     screenHeightRef.current = screenHeight;
     topInsetRef.current = topInset;
     toolbarBaseHeightRef.current = toolbarBaseHeight;
+    hasRecentBookmarksRef.current = bookmarks.length > 0;
   });
 
   // Drag-to-dismiss anywhere on the drawer's non-interactive surface. Writes
@@ -274,13 +404,24 @@ export default function ReaderScreen() {
   // within one session. On release, any net downward pull anchors it back to
   // the resting height (tools peek in toolbar mode, 75%-screen in save
   // mode); a net upward drag leaves it wherever it was released.
-  const DRAWER_CLOSE_THRESHOLD = 100;
-  const baseHeightFor = (mode: 'toolbar' | 'save') => (mode === 'save' ? screenHeightRef.current * 0.75 : toolbarBaseHeightRef.current);
+  // (DRAWER_CLOSE_THRESHOLD lives at module scope — createSheetPanResponder
+  // above needs it too.)
+  const baseHeightFor = (mode: 'toolbar' | 'save') => (mode === 'save' ? screenHeightRef.current * 0.75 + (hasRecentBookmarksRef.current ? RECENT_SAVES_TITLE_HEIGHT : 0) : toolbarBaseHeightRef.current);
   const maxTotalHeightFor = (mode: 'toolbar' | 'save') => (mode === 'toolbar' ? screenHeightRef.current * 0.75 : screenHeightRef.current - topInsetRef.current);
   const maxExtraFor = (mode: 'toolbar' | 'save') => Math.max(0, maxTotalHeightFor(mode) - baseHeightFor(mode));
   const drawerPanResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
+      // Never claim on touch-down — only via onMoveShouldSetPanResponder
+      // below, once real vertical drag distance is seen. Claiming
+      // unconditionally on start (the old `() => true`) intermittently stole
+      // taps from interactive children placed inside a drag region (buttons,
+      // text input) on Android, which is why those used to be carved out of
+      // the pan-handled area entirely. Fixing this at the source is what
+      // lets the *entire* drawer header (handle + buttons + note input) be
+      // one draggable region below without breaking their own taps — a tap
+      // (near-zero dy) never crosses the onMoveShouldSetPanResponder
+      // threshold, so the child's own responder claim always wins first.
+      onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dy) > 4 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
       onPanResponderGrant: (_, gesture) => {
         lastTouchYRef.current = gesture.y0;
@@ -338,8 +479,26 @@ export default function ReaderScreen() {
     })
   ).current;
 
+  // Whole-sheet drag-to-dismiss for the N.T. and highlighted-verse sheets
+  // (see createSheetPanResponder above) — separate instances since each
+  // closes over its own Animated.Value/dismiss callback.
+  const ntSheetPanResponder = useRef(createSheetPanResponder(sheetAnim, closeNtSheet)).current;
+  const savedNoteSheetPanResponder = useRef(createSheetPanResponder(savedNoteSheetAnim, closeSavedNoteSheet)).current;
+
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      // NT popup / saved-note sheet checked first — closing either of these
+      // was previously missing here entirely (only the drawer/selection was
+      // handled), so hardware back fell through to the OS default (leaving
+      // the reader) while one was open instead of just dismissing it.
+      if (ntSheetRef.current) {
+        closeNtSheet();
+        return true;
+      }
+      if (savedNoteSheetRef.current) {
+        closeSavedNoteSheet();
+        return true;
+      }
       if (drawerModeRef.current === 'save') {
         handleBackToToolbar();
         return true;
@@ -351,7 +510,7 @@ export default function ReaderScreen() {
       return false;
     });
     return () => sub.remove();
-  }, [clearVerseSelection, handleBackToToolbar]);
+  }, [clearVerseSelection, handleBackToToolbar, closeNtSheet, closeSavedNoteSheet]);
 
   // verseFraction (0..1): how far into this block the target verse sits,
   // estimated as (sentence index / sentence count) since RN can't measure an
@@ -847,25 +1006,62 @@ function renderInline(
     [bookmarks]
   );
 
+  const handleShareBookmark = useCallback((item: SavedBookmark) => {
+    const verseText = getVersesText(item.bookId, item.anchor, item.paragraph, item.verses ?? []);
+    const message = verseText ? `${verseText}\n\n${item.notation}` : `${item.notation} — ${item.note}`;
+    Share.share({ message });
+  }, []);
+
+  const handleDeleteBookmark = useCallback((item: SavedBookmark) => {
+    deleteBookmark(item.id);
+    if (Platform.OS === 'android') ToastAndroid.show('Eliminado', ToastAndroid.SHORT);
+  }, [deleteBookmark]);
+
+  // "Eliminar" in a recent-saves row's UIMenu opens this confirm step
+  // instead of deleting straight away — holds the pending item until the
+  // user confirms or cancels in the ConfirmDialog rendered below.
+  const [deleteBookmarkTarget, setDeleteBookmarkTarget] = useState<SavedBookmark | null>(null);
+
   // Shared between the toolbar and save drawers so both can list recent saves.
   const recentBookmarksSection = recentBookmarks.length > 0 ? (
     <View style={styles.saveDrawerFullBleed}>
-      <View style={styles.saveDrawerListHeader} {...drawerPanResponder.panHandlers}>
-        <Text style={[styles.saveDrawerListHeaderText, { color: t.fontColorGray }]}>Guardados recientes</Text>
-      </View>
+      <IndexTitleL1 label="Guardados recientes" {...drawerPanResponder.panHandlers} />
       <ScrollView style={styles.saveDrawerList} keyboardShouldPersistTaps="handled">
         {recentBookmarks.map(item => (
-          <SavedItemRow
+          <SavedItem
             key={item.id}
-            item={item}
+            label={item.name ? `${item.notation} - ${item.name}` : item.notation}
+            date={formatSavedDate(item.date)}
+            note={item.note}
             onPress={() => {
               if (navigating) return;
               setNavigating(true);
               startLoadBar();
               // Drawer stays open (not animated closed) until the saved
               // item's screen actually opens, per its own transition.
-              setTimeout(() => router.push(bookmarkHref(item)), 200);
+              // Caps how deep a chain of drawer jumps can stack (see
+              // MAX_READER_CHAIN_DEPTH) — under the cap, push as normal
+              // (full back history through each jump); at the cap, replace
+              // instead so the stack stops growing but this and the next
+              // couple of jumps still behave identically to today.
+              const atCap = chainDepth >= MAX_READER_CHAIN_DEPTH;
+              // `as const` isn't decorative here — expo-router's typed
+              // routes need the template-literal type preserved (matching
+              // the `/reader?${string}` pattern `bookmarkHref` already
+              // returns); without it this widens to plain `string`, which
+              // TS rejects for router.push/replace.
+              const nextHref = `${bookmarkHref(item)}&chain=${atCap ? MAX_READER_CHAIN_DEPTH : chainDepth + 1}` as const;
+              setTimeout(() => (atCap ? router.replace(nextHref) : router.push(nextHref)), 200);
             }}
+            actionsSlot={
+              <UIMenu
+                iconColor={savedRowIconColor}
+                actions={[
+                  { id: 'share', title: 'Compartir', onPress: () => handleShareBookmark(item) },
+                  { id: 'delete', title: 'Eliminar', destructive: true, onPress: () => setDeleteBookmarkTarget(item) },
+                ]}
+              />
+            }
           />
         ))}
       </ScrollView>
@@ -1116,6 +1312,18 @@ function renderInline(
         />
       </Animated.View>
 
+      {/* Wrapping the scroll content in a Pressable lets a tap that lands on
+          non-interactive space (headings, margins, gaps between verses)
+          close the toolbar drawer. RN's touch-responder negotiation resolves
+          a tap on a verse Text (which has its own onPress) at that deeper
+          node first, so verse selection/deselection keeps working exactly as
+          before; only taps no descendant claims reach this handler. onPress
+          is only wired up while the toolbar drawer is actually open — left
+          undefined otherwise so this never touches normal scrolling/reading. */}
+      <Pressable
+        style={styles.scroll}
+        onPress={drawerVisible && drawerMode === 'toolbar' ? clearVerseSelection : undefined}
+      >
       <AppScrollView
         ref={scrollRef}
         style={styles.scroll}
@@ -1142,14 +1350,14 @@ function renderInline(
 
             case 'book-heading':
               return (
-                <Text key={key} selectable style={[styles.bookHeading, { marginTop: mt }]} onLayout={onLayout}>
+                <Text key={key} selectable={nativeTextSelectable} style={[styles.bookHeading, { marginTop: mt }]} onLayout={onLayout}>
                   {block.title}
                 </Text>
               );
 
             case 'part-heading':
               return (
-                <Text key={key} selectable style={[styles.partHeading, { marginTop: mt }]} onLayout={onLayout}>
+                <Text key={key} selectable={nativeTextSelectable} style={[styles.partHeading, { marginTop: mt }]} onLayout={onLayout}>
                   {block.title}
                 </Text>
               );
@@ -1165,11 +1373,11 @@ function renderInline(
                 <View key={key} style={{ marginTop: mt }} onLayout={chapterLayout}>
                   {block.subtitle ? (
                     <>
-                      <Text selectable style={styles.chapterNumber}>{fmt(block.title ?? '')}</Text>
-                      <Text selectable style={[styles.chapterHeading, { marginTop: Spacing[4] }]}>{fmt(block.subtitle ?? '')}</Text>
+                      <Text selectable={nativeTextSelectable} style={styles.chapterNumber}>{fmt(block.title ?? '')}</Text>
+                      <Text selectable={nativeTextSelectable} style={[styles.chapterHeading, { marginTop: Spacing[4] }]}>{fmt(block.subtitle ?? '')}</Text>
                     </>
                   ) : (
-                    <Text selectable style={isSetIntro ? styles.chapterNumber : styles.chapterHeading}>{fmt(block.title ?? '')}</Text>
+                    <Text selectable={nativeTextSelectable} style={isSetIntro ? styles.chapterNumber : styles.chapterHeading}>{fmt(block.title ?? '')}</Text>
                   )}
                 </View>
               );
@@ -1181,7 +1389,7 @@ function renderInline(
                 if (block === scrollTargetBlock) handleAnchorLayout(e);
               };
               return (
-                <Text key={key} selectable style={[styles.sectionHeading, { marginTop: mt }]} onLayout={sectionLayout}>
+                <Text key={key} selectable={nativeTextSelectable} style={[styles.sectionHeading, { marginTop: mt }]} onLayout={sectionLayout}>
                   {block.title}
                 </Text>
               );
@@ -1189,7 +1397,7 @@ function renderInline(
 
             case 'lesson-group-heading':
               return (
-                <Text key={key} selectable style={[styles.lessonTitle, { marginTop: mt }]} onLayout={block === scrollTargetBlock ? (e) => handleAnchorLayout(e, true) : undefined}>
+                <Text key={key} selectable={nativeTextSelectable} style={[styles.lessonTitle, { marginTop: mt }]} onLayout={block === scrollTargetBlock ? (e) => handleAnchorLayout(e, true) : undefined}>
                   {block.title}
                 </Text>
               );
@@ -1201,14 +1409,14 @@ function renderInline(
               };
               if (block.anchor === 'workbook-part2-final') {
                 return (
-                  <Text key={key} selectable style={[styles.lessonTitle, { marginTop: mt }]} onLayout={setLayout}>
+                  <Text key={key} selectable={nativeTextSelectable} style={[styles.lessonTitle, { marginTop: mt }]} onLayout={setLayout}>
                     {block.subtitle}
                   </Text>
                 );
               }
               return (
                 <View key={key} style={{ marginTop: mt }} onLayout={setLayout}>
-                  <Text selectable style={styles.lessonSetSubtitle}>{block.subtitle}</Text>
+                  <Text selectable={nativeTextSelectable} style={styles.lessonSetSubtitle}>{block.subtitle}</Text>
                 </View>
               );
             }
@@ -1220,9 +1428,9 @@ function renderInline(
               };
               return (
                 <View key={key} style={{ marginTop: mt }} onLayout={lessonLayout}>
-                  <Text selectable style={styles.lessonTitle}>{block.title}</Text>
+                  <Text selectable={nativeTextSelectable} style={styles.lessonTitle}>{block.title}</Text>
                   {block.subtitle && (
-                    <Text selectable style={[styles.lessonSubtitle, { marginTop: Spacing[4] }]}>{block.subtitle}</Text>
+                    <Text selectable={nativeTextSelectable} style={[styles.lessonSubtitle, { marginTop: Spacing[4] }]}>{block.subtitle}</Text>
                   )}
                 </View>
               );
@@ -1250,7 +1458,7 @@ function renderInline(
                       return (
                         <Text
                           key={si}
-                          selectable
+                          selectable={nativeTextSelectable}
                           onPress={() => handleVersePress(verseKey)}
                           style={[
                             styles.bodyLarge,
@@ -1269,7 +1477,7 @@ function renderInline(
                 );
               }
               return (
-                <Text key={key} selectable style={[styles.bodyLarge, styles.stanzaBlock, { marginTop: mt }]} onLayout={stanzaBlockLayout}>
+                <Text key={key} selectable={nativeTextSelectable} style={[styles.bodyLarge, styles.stanzaBlock, { marginTop: mt }]} onLayout={stanzaBlockLayout}>
                   {stSentences.map((s, si) => {
                     const verseKey = `${key}:${si}`;
                     const selected = selectedVerses.has(verseKey);
@@ -1307,7 +1515,7 @@ function renderInline(
                 return (
                   <View key={key} style={{ marginTop: mt }} onLayout={textBlockLayout}>
                     {lines.map((line, li) => (
-                      <Text key={li} selectable style={[
+                      <Text key={li} selectable={nativeTextSelectable} style={[
                         styles.bodyLarge,
                         line.spaceBefore && { marginTop: Spacing[20] },
                       ]}>
@@ -1342,7 +1550,7 @@ function renderInline(
                 );
               }
               return (
-                <Text key={key} selectable style={[styles.bodyLarge, { marginTop: mt }, block.indent && styles.stanzaBlock, block.center && { textAlign: 'center' }]} onLayout={textBlockLayout}>
+                <Text key={key} selectable={nativeTextSelectable} style={[styles.bodyLarge, { marginTop: mt }, block.indent && styles.stanzaBlock, block.center && { textAlign: 'center' }]} onLayout={textBlockLayout}>
                   {numbered && block.paragraph != null && `${block.paragraph}.  `}
                   {sentences.map((s, si) => {
                     const verseKey = `${key}:${si}`;
@@ -1378,8 +1586,9 @@ function renderInline(
         })}
         {nextContentKey && (
           <View style={styles.nextChapterContainer}>
-            <RipplePressable
-              style={({ pressed }) => [styles.nextChapterBtn, pressed && styles.nextChapterBtnPressed]}
+            <Button
+              variant="mainHome"
+              className="shadow-none justify-center"
               onPress={() => {
                 if (navigating) return;
                 setNavigating(true);
@@ -1387,15 +1596,16 @@ function renderInline(
                 setTimeout(() => router.replace({ pathname: '/reader', params: { book: bookId, anchor: nextContentKey } }), 200);
               }}
             >
-              <Text style={styles.nextChapterLabel}>
+              <ButtonText>
                 {bookId === 'workbook' ? 'Siguiente lección'
                   : (currentContentKey === 'supplements' && nextContentKey === 'supplement-song') ? 'Siguiente libro'
                   : 'Siguiente capítulo'}
-              </Text>
-            </RipplePressable>
+              </ButtonText>
+            </Button>
           </View>
         )}
       </AppScrollView>
+      </Pressable>
       </SafeAreaView>
 
       {/* Android's edge-to-edge status bar is always transparent (its
@@ -1412,12 +1622,19 @@ function renderInline(
       )}
       {ntSheet && (
         <Animated.View style={[styles.sheetSlide, { transform: [{ translateY: sheetAnim.interpolate({ inputRange: [0, 1], outputRange: [500, 0] }) }] }]}>
-          <SafeAreaView edges={['bottom']} style={styles.sheetContainer}>
-            <Pressable>
-              <View style={styles.sheetHandle} />
-              <Text style={styles.sheetLabel}>Nota de traducción — {ntSheet.word}</Text>
-              <Text style={styles.sheetText}>{ntSheet.note}</Text>
-            </Pressable>
+          {/* Figma "Text" variant — its own container/handle/title/body
+              styles (also reused as-is by savedNoteSheet below). Whole sheet
+              is one drag-to-dismiss region — a tap (near-zero dy) never
+              crosses ntSheetPanResponder's move threshold, so this sheet has
+              no other interactive children to protect. */}
+          <SafeAreaView edges={['bottom']} style={styles.ntSheetContainer}>
+            <View {...ntSheetPanResponder.panHandlers}>
+              <View style={styles.ntSheetHandleWrap}>
+                <View style={styles.ntSheetHandle} />
+              </View>
+              <Text style={styles.ntSheetTitle}>Nota de traducción — {ntSheet.word}</Text>
+              <Text style={styles.ntSheetBody}>{ntSheet.note}</Text>
+            </View>
           </SafeAreaView>
         </Animated.View>
       )}
@@ -1429,38 +1646,44 @@ function renderInline(
       )}
       {savedNoteSheet && (
         <Animated.View style={[styles.sheetSlide, { transform: [{ translateY: savedNoteSheetAnim.interpolate({ inputRange: [0, 1], outputRange: [500, 0] }) }] }]}>
-          <SafeAreaView edges={['bottom']} style={styles.sheetContainer}>
-            <Pressable>
-              <View style={styles.sheetHandle} />
-              <View style={styles.sheetTitleRow}>
-                <Text style={[styles.sheetLabel, styles.sheetTitleText]}>
+          {/* Restyled to match the N.T. sheet above (ntSheetContainer/
+              ntSheetHandleWrap/ntSheetHandle/ntSheetBody), plus its own
+              title+actions row (ntSheetTitleRow/ntSheetTitleText) to fit the
+              UIMenu the N.T. sheet doesn't have. Whole sheet is draggable —
+              the UIMenu button stays a plain tap target because it already
+              self-claims the touch responder before any ancestor gets a
+              chance (see components/UIMenu.tsx), and ntSheetPanResponder
+              additionally never claims on touch-down (only on real drag
+              distance), so the two never contest a tap. */}
+          <SafeAreaView edges={['bottom']} style={styles.ntSheetContainer}>
+            <View {...savedNoteSheetPanResponder.panHandlers}>
+              <View style={styles.ntSheetHandleWrap}>
+                <View style={styles.ntSheetHandle} />
+              </View>
+              <View style={styles.ntSheetTitleRow}>
+                <Text style={[styles.ntSheetTitle, styles.ntSheetTitleText]}>
                   {savedNoteSheet.name ? `${savedNoteSheet.notation} - ${savedNoteSheet.name}` : savedNoteSheet.notation}
                 </Text>
-                <View onStartShouldSetResponder={() => true} onResponderTerminationRequest={() => false}>
-                  <MenuView
-                    onPressAction={({ nativeEvent }) => {
-                      if (nativeEvent.event === 'share') handleShareSavedNote();
-                      else if (nativeEvent.event === 'delete') handleDeleteSavedNote();
-                    }}
-                    actions={[
-                      { id: 'share', title: 'Compartir' },
-                      { id: 'delete', title: 'Eliminar', attributes: { destructive: true } },
-                    ]}
-                  >
-                    <TertiaryButton hitSize={40} rippleColor={t.darkerBackgroundColor}>
-                      {(pressed) => <ActionsIcon size={16} color={pressed ? t.pressedIconColor : t.fontColorPrimary} />}
-                    </TertiaryButton>
-                  </MenuView>
-                </View>
+                <UIMenu
+                  iconColor={(pressed) => (pressed ? t.pressedIconColor : t.fontColorPrimary)}
+                  actions={[
+                    { id: 'share', title: 'Compartir', onPress: handleShareSavedNote },
+                    { id: 'delete', title: 'Eliminar', destructive: true, onPress: () => setDeleteNoteConfirmOpen(true) },
+                  ]}
+                />
               </View>
-              <Text style={styles.sheetText}>{savedNoteSheet.note || 'Sin nota'}</Text>
-            </Pressable>
+              <Text style={styles.ntSheetBody}>{savedNoteSheet.note || 'Sin nota'}</Text>
+            </View>
           </SafeAreaView>
         </Animated.View>
       )}
 
       {drawerVisible && drawerMode === 'save' && (
-        <Pressable style={StyleSheet.absoluteFill} onPress={handleBackToToolbar}>
+        // Tapping the dimmed background fully closes the drawer (clears the
+        // selection too) rather than just stepping back to toolbar mode —
+        // clearVerseSelection keeps drawerVisible/selectedVerses in sync
+        // (see its own definition above).
+        <Pressable style={StyleSheet.absoluteFill} onPress={clearVerseSelection}>
           <Animated.View style={[StyleSheet.absoluteFill, styles.sheetOverlayBg, { opacity: drawerAnim }]} pointerEvents="none" />
         </Pressable>
       )}
@@ -1468,54 +1691,106 @@ function renderInline(
         <Animated.View style={[styles.sheetSlide, { transform: [{ translateY: drawerAnim.interpolate({ inputRange: [0, 1], outputRange: [500, 0] }) }] }]}>
           {drawerMode === 'toolbar' ? (
             <Animated.View style={{ height: Animated.add(toolbarBaseHeight, drawerExtraHeight) }}>
-              <View style={[styles.toolsDrawerContainer, { flex: 1, paddingBottom: bottomInset }]}>
-                <View {...drawerPanResponder.panHandlers}>
-                  <View style={styles.toolsDrawerHandleWrap}>
-                    <View style={styles.toolsDrawerHandle} />
+              <View style={styles.drawerOuter}>
+                {/* Whole header (handle + Guardar/Compartir row) is one drag
+                    region — safe now that drawerPanResponder's
+                    onStartShouldSetPanResponder never claims on touch-down
+                    (see its own definition above), so a tap on either button
+                    still resolves to the button first. */}
+                <View style={styles.drawerHeader} {...drawerPanResponder.panHandlers}>
+                  <View style={styles.drawerHandleWrap}>
+                    <View style={styles.drawerHandle} />
                   </View>
                   <View style={styles.toolsDrawerRow}>
                     <ReaderToolButton variant="save" style={styles.toolsDrawerButton} onPress={handleSaveTapped} />
                     <ReaderToolButton variant="share" style={styles.toolsDrawerButton} onPress={handleShareSelection} />
                   </View>
                 </View>
-                {recentBookmarksSection}
+                <View style={[styles.drawerBody, { paddingBottom: bottomInset }]}>
+                  {recentBookmarksSection}
+                </View>
               </View>
             </Animated.View>
           ) : (
-            <Animated.View style={{ height: Animated.add(screenHeight * 0.75, drawerExtraHeight) }}>
-              <View style={[styles.saveDrawerContainer, { flex: 1, paddingBottom: bottomInset }]}>
-                <View {...drawerPanResponder.panHandlers}>
-                  <View style={styles.toolsDrawerHandleWrap}>
-                    <View style={styles.toolsDrawerHandle} />
+            <Animated.View style={{ height: Animated.add(screenHeight * 0.75 + (recentBookmarks.length > 0 ? RECENT_SAVES_TITLE_HEIGHT : 0), drawerExtraHeight) }}>
+              <View style={styles.drawerOuter}>
+                {/* Whole header (handle + title + note input + submit
+                    button) is one drag region, same reasoning as toolbar
+                    mode above — the note input stays focusable/typeable and
+                    the submit button stays tappable since a tap never
+                    crosses drawerPanResponder's move threshold. */}
+                <View style={styles.drawerHeader} {...drawerPanResponder.panHandlers}>
+                  <View style={styles.saveDrawerDragZone}>
+                    <View style={styles.drawerHandleWrap}>
+                      <View style={styles.drawerHandle} />
+                    </View>
+                    <Text style={styles.saveDrawerTitle}>Guardar versos</Text>
                   </View>
-                  <Text style={[styles.saveDrawerTitle, { color: t.fontColorPrimary }]}>Guardar versos</Text>
+                  <View style={styles.saveDrawerNoteInputWrap}>
+                    <View style={styles.saveDrawerNoteInputField}>
+                      <TextInputField value={noteText} onChangeText={setNoteText} onSubmit={handleSubmitNote} autoFocus />
+                    </View>
+                    <IconButton
+                      // PlusIcon defaults to a smaller glyph centered in a larger
+                      // tap-target box (see components/Icons.tsx) — here we want
+                      // Figma's literal flat 16×16 glyph instead, so glyphSize is
+                      // pinned to match the container size rather than the default
+                      // 10/24 ratio.
+                      icon={(props) => <PlusIcon glyphSize={props.size} {...props} />}
+                      iconSize={16}
+                      surface="solid"
+                      onPress={handleSubmitNote}
+                    />
+                  </View>
                 </View>
-                <View style={styles.saveDrawerNoteInputWrap}>
-                  <NoteInput value={noteText} onChangeText={setNoteText} onSubmit={handleSubmitNote} autoFocus />
+                <View style={[styles.drawerBody, { paddingBottom: bottomInset }]}>
+                  {recentBookmarksSection}
                 </View>
-                {recentBookmarksSection}
               </View>
             </Animated.View>
           )}
         </Animated.View>
       )}
 
-      {loadBarVisible && (
-        <View style={[loadBarStyles.track, { backgroundColor: isDark ? Colors.transparent : t.darkOutline }]}>
-          <Animated.View style={[
-            loadBarStyles.fill,
-            { backgroundColor: isDark ? t.darkerBackgroundColor : t.fontColorPrimary },
-            { transform: [{ translateX: loadBarAnim.interpolate({ inputRange: [0, 1], outputRange: [-screenWidth, 0] }) }] },
-          ]} />
-        </View>
-      )}
+      <LoadingBar
+        visible={loadBarVisible}
+        progress={loadBarAnim}
+        screenWidth={screenWidth}
+        style={loadBarStyles.position}
+      />
+
+      <ConfirmDialog
+        open={!!deleteBookmarkTarget}
+        onOpenChange={(open) => { if (!open) setDeleteBookmarkTarget(null); }}
+      >
+        <ConfirmDialogContent
+          title="¿Eliminar verso guardado?"
+          description="Esta acción no se puede deshacer."
+          onCancel={() => setDeleteBookmarkTarget(null)}
+          onConfirm={() => {
+            if (deleteBookmarkTarget) handleDeleteBookmark(deleteBookmarkTarget);
+            setDeleteBookmarkTarget(null);
+          }}
+        />
+      </ConfirmDialog>
+
+      <ConfirmDialog open={deleteNoteConfirmOpen} onOpenChange={setDeleteNoteConfirmOpen}>
+        <ConfirmDialogContent
+          title="¿Eliminar verso guardado?"
+          description="Esta acción no se puede deshacer."
+          onCancel={() => setDeleteNoteConfirmOpen(false)}
+          onConfirm={() => {
+            handleDeleteSavedNote();
+            setDeleteNoteConfirmOpen(false);
+          }}
+        />
+      </ConfirmDialog>
     </SafeAreaView>
   );
 }
 
 const loadBarStyles = StyleSheet.create({
-  track: { position: 'absolute', left: 0, right: 0, bottom: 0, height: BorderWidth.lg, overflow: 'hidden' },
-  fill: { position: 'absolute', left: 0, right: 0, height: BorderWidth.lg },
+  position: { position: 'absolute', left: 0, right: 0, bottom: 0 },
 });
 
 function createStyles(t: ReturnType<typeof useThemeColors>, isDark: boolean) {
@@ -1611,7 +1886,8 @@ function createStyles(t: ReturnType<typeof useThemeColors>, isDark: boolean) {
     backgroundColor: t.savedHighlight,
   },
 
-  // N.T. bottom sheet
+  // N.T. bottom sheet — also reused by the highlighted-verse (savedNoteSheet)
+  // sheet, which now shares the same visuals (see ntSheetContainer below).
   sheetSlide: {
     position: 'absolute',
     bottom: 0,
@@ -1621,127 +1897,143 @@ function createStyles(t: ReturnType<typeof useThemeColors>, isDark: boolean) {
   sheetOverlayBg: {
     backgroundColor: t.overlay,
   },
-  sheetContainer: {
-    backgroundColor: t.darkerBackgroundColor,
-    borderTopLeftRadius: Radius.xl,
-    borderTopRightRadius: Radius.xl,
-    paddingHorizontal: Spacing[24],
-    paddingTop: Spacing[16],
-    paddingBottom: Spacing[8],
+
+  // N.T. ("Nota de traducción") sheet — Figma Drawers "Text" variant. Its own
+  // container/handle/title/body. Single-tone header only — the Text variant
+  // has no separate body section, unlike Tools/Save below. Also reused as-is
+  // by savedNoteSheet (the highlighted-verse sheet), which layers its own
+  // ntSheetTitleRow/ntSheetTitleText on top for its title+UIMenu row.
+  ntSheetContainer: {
+    backgroundColor: isDark ? Colors.dark100 : Colors.brand100,
+    borderTopLeftRadius: Radius.lg,
+    borderTopRightRadius: Radius.lg,
+    paddingLeft: Spacing[16],
+    paddingRight: Spacing[16],
+    paddingTop: Spacing[8],
+    paddingBottom: Spacing[12],
   },
-  sheetHandle: {
-    width: 36,
-    height: 4,
-    backgroundColor: t.darkOutline,
-    borderRadius: Radius.sm,
-    alignSelf: 'center',
+  ntSheetHandleWrap: {
+    width: '100%',
+    alignItems: 'center',
     marginBottom: Spacing[20],
   },
-  sheetLabel: {
+  ntSheetHandle: {
+    width: 60,
+    height: 6,
+    borderRadius: Radius.sm,
+    backgroundColor: isDark ? Colors.gold100 : Colors.brand400,
+  },
+  ntSheetTitle: {
     ...BookFonts.bodyMdSemibold,
-    color: t.fontColorPrimary,
+    color: isDark ? Colors.brand100 : Colors.ink100,
     marginBottom: Spacing[12],
   },
-  sheetTitleRow: {
+  ntSheetBody: {
+    ...BookFonts.bodySmRegularItalic,
+    color: isDark ? Colors.brand300 : Colors.ink100,
+  },
+  // savedNoteSheet-only: title + UIMenu actions button row, laid out like
+  // the old sheetTitleRow/sheetTitleText but reusing ntSheetTitle's own
+  // typography/color (via a style array at the call site) instead of
+  // sheetLabel's.
+  ntSheetTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: Spacing[8],
     marginBottom: Spacing[12],
   },
-  sheetTitleText: {
+  ntSheetTitleText: {
     flex: 1,
     marginBottom: Spacing.none,
   },
-  sheetText: {
-    ...BookFonts.bodySmRegularItalic,
-    color: t.fontColorPrimary,
-    marginBottom: Spacing[16],
-  },
 
-  // Reader tools drawer
-  toolsDrawerContainer: {
-    backgroundColor: t.darkerBackgroundColor,
+  // Reader tools drawer + save-verses drawer — Figma Drawers "Tools"/"Save"
+  // variants. Both modes share one header/body two-tone treatment: header
+  // (drawerHeader) top-toned, body (drawerBody, holds recentBookmarksSection)
+  // bottom-toned. The corner radius lives on drawerHeader itself (Figma:
+  // radius only on the header frame, not a wrapping clip container) since
+  // the body sits flush below it with square corners.
+  // Outer column shared by both modes: header (intrinsic height) + body
+  // (flex, fills the remainder of the Animated.View's drag-resizable
+  // height).
+  drawerOuter: {
+    flex: 1,
+  },
+  drawerHeader: {
+    backgroundColor: isDark ? Colors.dark200 : Colors.brand200,
     borderTopLeftRadius: Radius.lg,
     borderTopRightRadius: Radius.lg,
-    paddingHorizontal: Spacing[16],
+    paddingLeft: Spacing[16],
+    paddingRight: Spacing[16],
     paddingTop: Spacing[8],
     paddingBottom: Spacing[12],
+    // Gap from the pill handle down to the next element (button row in
+    // toolbar mode, the drag zone's own bottom edge in save mode) — 20px.
+    gap: Spacing[20],
+    // Tokens.Shadows.drawer. Uses the cross-platform `boxShadow` style
+    // (RN 0.74+/New Arch, on here per app.json's newArchEnabled) rather than
+    // shadow*/elevation — Android's `elevation` can't express a custom
+    // (upward) shadow direction at all.
+    boxShadow: Shadows.drawer,
   },
-  toolsDrawerHandleWrap: {
+  drawerBody: {
+    flex: 1,
+    backgroundColor: isDark ? Colors.dark100 : Colors.brand100,
+  },
+  drawerHandleWrap: {
+    width: '100%',
     alignItems: 'center',
-    paddingVertical: Spacing[8],
-    marginBottom: Spacing[4],
   },
-  toolsDrawerHandle: {
+  drawerHandle: {
     width: 60,
     height: 6,
-    backgroundColor: t.darkOutline,
     borderRadius: Radius.sm,
+    backgroundColor: isDark ? Colors.gold100 : Colors.brand400,
   },
   toolsDrawerRow: {
     flexDirection: 'row',
-    gap: Spacing[8],
-    marginBottom: Spacing[12],
+    gap: Spacing[12],
   },
   toolsDrawerButton: {
     flex: 1,
+    // No Spacing token matches ~150px exactly (128 then 96 below it) — user
+    // chose to snap to the nearest existing token (128) rather than add a
+    // one-off raw value, keeping flex:1 so the two buttons still share the
+    // row width evenly but neither shrinks below this floor.
+    minWidth: Spacing[128],
   },
-
-  // Save-verses drawer
-  saveDrawerContainer: {
-    backgroundColor: t.darkerBackgroundColor,
-    borderTopLeftRadius: Radius.lg,
-    borderTopRightRadius: Radius.lg,
-    paddingHorizontal: Spacing[16],
-    paddingTop: Spacing[8],
+  // Handle+title grouping only (layout, no longer a separate pan-handled
+  // surface — drawerHeader itself now carries drawerPanResponder.panHandlers
+  // for the whole header, handle through submit button). Same 20px gap as
+  // drawerHeader's own `gap` so handle→title reads identically to
+  // title→input-row.
+  saveDrawerDragZone: {
+    gap: Spacing[20],
   },
   saveDrawerTitle: {
-    ...UIFonts.bodySRegular,
+    ...UIFonts.bodySSemibold,
     textAlign: 'center',
-    marginBottom: Spacing[12],
+    color: isDark ? Colors.brand100 : Colors.ink100,
   },
   saveDrawerNoteInputWrap: {
-    marginBottom: Spacing[12],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing[6],
+  },
+  saveDrawerNoteInputField: {
+    flex: 1,
   },
   saveDrawerFullBleed: {
     flex: 1,
-    marginHorizontal: -Spacing[16],
-    backgroundColor: t.backgroundColor,
   },
-  saveDrawerListHeader: {
-    paddingTop: Spacing[24],
-    paddingBottom: Spacing[12],
-    paddingHorizontal: Spacing[24],
-  },
-  saveDrawerListHeaderText: UIFonts.capsBodyXsRegular,
   saveDrawerList: {
     flex: 1,
   },
 
   // Next-chapter button
   nextChapterContainer: {
-    marginTop: Spacing[56],
-  },
-  // Bar always renders on a fixed white background (Figma: primary-button-bg,
-  // same value in both themes), so its text color is fixed to the light-mode
-  // equivalent here rather than pulled from useThemeColors() — otherwise
-  // dark mode flips it to white-on-white and the label disappears.
-  nextChapterBtn: {
-    overflow: 'hidden',
-    backgroundColor: Colors.neutral100,
-    borderRadius: Radius.lg,
-    borderWidth: BorderWidth.md,
-    borderColor: Colors.brand400,
-    paddingHorizontal: Spacing[24],
-    paddingVertical: Spacing[12],
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  nextChapterBtnPressed: {},
-  nextChapterLabel: {
-    ...UIFonts.bodySRegular,
-    color: Colors.ink100,
+    marginTop: Spacing[40],
   },
 
   });

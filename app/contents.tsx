@@ -1,18 +1,15 @@
 import { useState, useCallback, useRef } from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet, Animated, useWindowDimensions } from 'react-native';
-import { RipplePressable } from '@/components/RipplePressable';
+import { ScrollView, StyleSheet, Animated, useWindowDimensions } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { PlusIcon, MinusIcon } from '@/components/Icons';
 import { NavBar } from '@/components/NavBar';
-import { BookSectionHeading } from '@/components/BookSectionHeading';
+import { IndexTitleL1, IndexItemRow, IndexAccordionGroup, IndexAccordionItem } from '@/components/ui/index-item';
+import { LoadingBar } from '@/components/ui/loading-bar';
 import { AppScrollView } from '@/components/AppScrollView';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { toTitleCase } from '@/utils/text';
 import { useTheme, useThemeColors } from '@/utils/theme';
-import { UIFonts } from '@/constants/Typography';
-import { Colors } from '@/constants/Colors';
-import { Spacing, BorderWidth } from '@/constants/Tokens';
+import { Spacing } from '@/constants/Tokens';
 
 const INDEX_FILES = {
   theory:     require('@/assets/content/theory-index.json'),
@@ -105,22 +102,28 @@ export default function ContentsScreen() {
   const scrollY = useRef(0);
   const itemYPositions = useRef<Map<string, number>>(new Map());
 
-  const toggleAccordion = useCallback((id: string) => {
-    setOpenAccordion(prev => {
-      if (prev === id) return null;
-      const oldY = itemYPositions.current.get(id) ?? 0;
+  // Controlled single/collapsible value-change handler for IndexAccordionGroup.
+  // On native, RNR's Accordion Root fires this with the item's own value when
+  // opening, or `undefined` when collapsing the currently-open item (single +
+  // collapsible mode) — so the id whose position we care about for the
+  // scroll-preserving adjustment below is either the new value (opening) or
+  // the previous openAccordion (closing).
+  const handleAccordionValueChange = useCallback((newValue: string | undefined) => {
+    const toggledId = newValue ?? openAccordion;
+    if (toggledId) {
+      const oldY = itemYPositions.current.get(toggledId) ?? 0;
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          const newY = itemYPositions.current.get(id) ?? 0;
+          const newY = itemYPositions.current.get(toggledId) ?? 0;
           const delta = oldY - newY;
           if (delta > 0) {
             scrollRef.current?.scrollTo({ y: Math.max(0, scrollY.current - delta), animated: false });
           }
         });
       });
-      return id;
-    });
-  }, []);
+    }
+    setOpenAccordion(newValue ?? null);
+  }, [openAccordion]);
 
   const startLoadBar = useCallback(() => {
     setLoadBarVisible(true);
@@ -153,96 +156,54 @@ export default function ContentsScreen() {
           style={[styles.scrollView, { backgroundColor: t.backgroundColor }]}
           onScroll={(e) => { scrollY.current = e.nativeEvent.contentOffset.y; }}
         >
-          {items.map((item) => {
-            if (item.type === 'Title-L1') {
-              return null;
-            }
+          <IndexAccordionGroup value={openAccordion ?? undefined} onValueChange={handleAccordionValueChange}>
+            {items.map((item) => {
+              if (item.type === 'Title-L1') {
+                return null;
+              }
 
-            if (item.type === 'Title-L2') {
-              return <BookSectionHeading key={item.id} label={toTitleCase(item.label)} />;
-            }
+              if (item.type === 'Title-L2') {
+                return <IndexTitleL1 key={item.id} label={toTitleCase(item.label)} />;
+              }
 
-            if (item.type === 'Accordion') {
-              const isOpen = openAccordion === item.id;
-              return (
-                <View key={item.id} onLayout={(e) => itemYPositions.current.set(item.id, e.nativeEvent.layout.y)}>
-                  <RipplePressable
-                    style={[styles.item, isOpen && { backgroundColor: t.darkerBackgroundColor }]}
-                    rippleColor={isOpen ? t.backgroundColor : t.darkerBackgroundColor}
-                    onPress={() => toggleAccordion(item.id)}
+              if (item.type === 'Accordion') {
+                return (
+                  <IndexAccordionItem
+                    key={item.id}
+                    value={item.id}
+                    label={item.bookId === 'mft' ? item.label : toTitleCase(item.label)}
+                    subtitle={item.subtitle ? (item.bookId === 'mft' ? item.subtitle : toTitleCase(item.subtitle)) : undefined}
+                    onLayout={(e) => itemYPositions.current.set(item.id, e.nativeEvent.layout.y)}
                   >
-                    {() => (
-                      <>
-                        <View style={styles.itemRow}>
-                          <View style={styles.itemText}>
-                            <Text style={[isOpen ? styles.itemLabelBold : styles.itemLabel, { color: t.fontColorPrimary }]}>{item.bookId === 'mft' ? item.label : toTitleCase(item.label)}</Text>
-                            {item.subtitle && (
-                              <Text style={[styles.itemSubtitle, { color: t.fontColorGray }]}>{item.bookId === 'mft' ? item.subtitle : toTitleCase(item.subtitle)}</Text>
-                            )}
-                          </View>
-                          {isOpen ? <MinusIcon color={t.fontColorGray} /> : <PlusIcon color={t.fontColorGray} />}
-                        </View>
-                        <View style={[styles.divider, { backgroundColor: t.darkOutline }]} />
-                      </>
-                    )}
-                  </RipplePressable>
-                  {isOpen && item.children?.map((child, childIndex) => (
-                    <RipplePressable
-                      key={child.id}
-                      style={[styles.item, { backgroundColor: t.darkerBackgroundColor }]}
-                      rippleColor={t.backgroundColor}
-                      onPress={() => { if (navigating) return; setNavigating(true); startLoadBar(); const anchor = childIndex === 0 && child.bookId === 'theory' ? item.id : (child.anchor ?? child.id); setTimeout(() => router.push(`/reader?book=${child.bookId}&anchor=${anchor}`), 200); }}
-                    >
-                      <>
-                        <View style={[styles.itemRow, styles.accordionChildRow, { paddingLeft: Spacing[24] + getChildIndentLevel(child.id) * 24 }]}>
-                          <View style={styles.itemText}>
-                            <Text style={[styles.itemLabel, { color: t.fontColorPrimary }]}>{child.label}</Text>
-                            {child.subtitle && (
-                              <Text style={[styles.itemSubtitle, { color: t.fontColorGray }]}>{child.subtitle}</Text>
-                            )}
-                          </View>
-                        </View>
-                        <View style={[styles.divider, { backgroundColor: t.darkOutline }]} />
-                      </>
-                    </RipplePressable>
-                  ))}
-                </View>
-              );
-            }
+                    {(item.children ?? []).map((child, childIndex) => ({
+                      id: child.id,
+                      label: child.label,
+                      subtitle: child.subtitle,
+                      indentLevel: getChildIndentLevel(child.id),
+                      onPress: () => {
+                        if (navigating) return;
+                        setNavigating(true);
+                        startLoadBar();
+                        const anchor = childIndex === 0 && child.bookId === 'theory' ? item.id : (child.anchor ?? child.id);
+                        setTimeout(() => router.push(`/reader?book=${child.bookId}&anchor=${anchor}`), 200);
+                      },
+                    }))}
+                  </IndexAccordionItem>
+                );
+              }
 
-            return (
-              <RipplePressable
-                key={item.id}
-                style={styles.item}
-                rippleColor={t.darkerBackgroundColor}
-                onPress={() => { if (navigating) return; setNavigating(true); startLoadBar(); setTimeout(() => router.push(`/reader?book=${item.bookId}&anchor=${item.anchor ?? item.id}`), 200); }}
-              >
-                {() => (
-                  <>
-                    <View style={styles.itemRow}>
-                      <View style={styles.itemText}>
-                        <Text style={[styles.itemLabel, { color: t.fontColorPrimary }]}>{item.bookId === 'mft' ? item.label : toTitleCase(item.label)}</Text>
-                        {item.subtitle && (
-                          <Text style={[styles.itemSubtitle, { color: t.fontColorGray }]}>{item.subtitle}</Text>
-                        )}
-                      </View>
-                    </View>
-                    <View style={[styles.divider, { backgroundColor: t.darkOutline }]} />
-                  </>
-                )}
-              </RipplePressable>
-            );
-          })}
+              return (
+                <IndexItemRow
+                  key={item.id}
+                  label={item.bookId === 'mft' ? item.label : toTitleCase(item.label)}
+                  subtitle={item.subtitle}
+                  onPress={() => { if (navigating) return; setNavigating(true); startLoadBar(); setTimeout(() => router.push(`/reader?book=${item.bookId}&anchor=${item.anchor ?? item.id}`), 200); }}
+                />
+              );
+            })}
+          </IndexAccordionGroup>
         </AppScrollView>
-        {loadBarVisible && (
-          <View style={[styles.loadBarTrack, { backgroundColor: isDark ? Colors.transparent : t.darkOutline }]}>
-            <Animated.View style={[
-              styles.loadBarFill,
-              { backgroundColor: isDark ? t.darkerBackgroundColor : t.fontColorPrimary },
-              { transform: [{ translateX: loadBarAnim.interpolate({ inputRange: [0, 1], outputRange: [-screenWidth, 0] }) }] },
-            ]} />
-          </View>
-        )}
+        <LoadingBar visible={loadBarVisible} progress={loadBarAnim} screenWidth={screenWidth} />
       </SafeAreaView>
     </SafeAreaView>
   );
@@ -260,46 +221,5 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingBottom: Spacing[40],
-  },
-  item: {
-    overflow: 'hidden',
-    paddingLeft: Spacing[24],
-    paddingRight: Spacing[24],
-    paddingTop: Spacing[12],
-    gap: Spacing[12],
-  },
-  itemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing[12],
-  },
-  divider: {
-    height: BorderWidth.sm,
-  },
-  itemText: {
-    flex: 1,
-    gap: Spacing[2],
-  },
-  itemLabel: {
-    ...UIFonts.bodyXsRegular,
-  },
-  itemLabelBold: {
-    ...UIFonts.bodyXsSemibold,
-  },
-  accordionChildRow: {
-    paddingLeft: Spacing[24],
-  },
-  itemSubtitle: {
-    ...UIFonts.body2xsRegular,
-  },
-  loadBarTrack: {
-    height: BorderWidth.lg,
-    overflow: 'hidden',
-  },
-  loadBarFill: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: BorderWidth.lg,
   },
 });

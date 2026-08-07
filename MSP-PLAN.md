@@ -210,7 +210,14 @@ note the older top-bar tip button is already commented out) to open PayPal via
 `WebBrowser.openBrowserAsync` (`expo-web-browser` already installed), unlocking no in-app content.
 
 **Cleanup / speed / stability.** Dead-code removal folds into the RNR migration. Drop the unused
-`@expo-google-fonts/merriweather-sans` dep (Typography actually uses Noto Sans). R8/minification via
+`@expo-google-fonts/merriweather-sans` dep (Typography actually uses Noto Sans). Also drop
+**`@react-native-menu/menu`** (2026-08-06): `components/UIMenu.tsx` briefly wrapped its native `MenuView`
+as a working fallback while a padding/corner-radius rendering bug in the custom Figma-matched dropdown
+was being chased; the real bug (plain `style`/`StyleSheet.create()` not reliably applying on Portal-
+rendered, absolutely-positioned views on-device — NativeWind `className` does) is now fixed and
+`UIMenu.tsx` no longer uses this package at all. Deliberately kept installed for now as an emergency
+fallback pattern; remove from `package.json` in this cleanup pass if it's still unused by then (also
+drop its `proguard-rules.pro` keep-rule entry below when it goes). R8/minification via
 the **`expo-build-properties`** plugin in `app.json` (`enableProguardInReleaseBuilds` +
 `enableShrinkResourcesInReleaseBuilds`) — never hand-edit gitignored `android/`; add `proguard-rules.pro`
 keep-rules for reflection-reliant modules (**expo-sqlite/FTS5**, reanimated, react-native-svg,

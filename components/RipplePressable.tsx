@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { Pressable, PressableProps, GestureResponderEvent, LayoutChangeEvent } from 'react-native';
+import { Pressable, PressableProps, GestureResponderEvent, LayoutChangeEvent, View } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
 import { Colors } from '@/constants/Colors';
 
@@ -13,9 +13,14 @@ type Props = PressableProps & {
   // Fill/clear the ripple instantly instead of animating scale-in/opacity-out.
   // The fill itself still shows on press — only the growth/fade motion is skipped.
   instant?: boolean;
+  // React 19 lets function components accept `ref` as a plain prop (no
+  // forwardRef wrapper needed) — forwarded straight to the underlying
+  // Pressable so callers can `.measure()` it (needed by UIMenu's asChild
+  // trigger, see components/UIMenu.tsx).
+  ref?: React.Ref<View>;
 };
 
-export function RipplePressable({ rippleColor = Colors.primaryButtonPressed, centered = false, instant = false, onPressIn, onPressOut, onLayout, children, ...rest }: Props) {
+export function RipplePressable({ rippleColor = Colors.primaryButtonPressed, centered = false, instant = false, onPressIn, onPressOut, onLayout, children, ref, ...rest }: Props) {
   const scale = useSharedValue(0);
   const opacity = useSharedValue(0);
   const originX = useSharedValue(0);
@@ -67,7 +72,7 @@ export function RipplePressable({ rippleColor = Colors.primaryButtonPressed, cen
   };
 
   return (
-    <Pressable onPressIn={handlePressIn} onPressOut={handlePressOut} onLayout={handleLayout} {...rest}>
+    <Pressable ref={ref} onPressIn={handlePressIn} onPressOut={handlePressOut} onLayout={handleLayout} {...rest}>
       {(state) => (
         <>
           <Animated.View style={rippleStyle} />

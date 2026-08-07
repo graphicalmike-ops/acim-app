@@ -15,7 +15,7 @@ export const Colors = {
   neutral200: '#CCCCCC',  // Figma: Colors/Neutral/Neutral 200
   neutral300: '#999999',  // Figma: Colors/Neutral/Neutral 300
   dark100:    '#1B1933',  // Figma: Colors/Dark/Dark 100 (old Dark 100 deleted; Dark 200 renamed to Dark 100)
-  dark200:    '#302C59',  // Not yet in Figma — app-defined, added on request
+  dark200:    '#302C59',  // Figma: Colors/Dark/Dark 200 (confirmed 2026-08-05 resync; was app-defined/added on request, Figma has since added a matching primitive)
   gold100:    '#A6875B',  // Figma: Colors/Gold/Gold 100
   gold200:    '#CCBBA3',  // Figma: Colors/Gold/Gold 200
   gold300:    '#B27E36',  // Figma: Colors/Gold/Gold 300

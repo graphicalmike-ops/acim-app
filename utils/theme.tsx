@@ -70,7 +70,7 @@ const DARK_COLORS = {
   darkOutline: Colors.brand400,
   primaryButtonBg: Colors.neutral100,
   overlay: Colors.overlay,
-  ntWordColor: Colors.neutral100,
+  ntWordColor: Colors.gold100,
   pressedIconColor: Colors.gold100,
   savedHighlight: Colors.savedHighlightDark,
 };

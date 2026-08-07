@@ -12,15 +12,19 @@ type Props = {
   color?: string;
   rippleColor?: string;
   children?: (pressed: boolean) => React.ReactNode;
+  // React 19 ref-as-prop, forwarded to the underlying RipplePressable/Pressable
+  // so callers can `.measure()` it — needed by UIMenu's asChild trigger.
+  ref?: React.Ref<View>;
 };
 
 // Icon buttons fill/clear their ripple instantly (no grow/fade animation) —
 // only the pressed-state color/fill swap remains, no motion.
-export function TertiaryButton({ size = 'md', hitSize, onPress, color = Colors.ink100, rippleColor = Colors.brand100, children }: Props) {
+export function TertiaryButton({ size = 'md', hitSize, onPress, color = Colors.ink100, rippleColor = Colors.brand100, children, ref }: Props) {
   const containerSize = hitSize ?? (size === 'md' ? 24 : 40);
 
   return (
     <RipplePressable
+      ref={ref}
       style={{
         width: containerSize,
         height: containerSize,

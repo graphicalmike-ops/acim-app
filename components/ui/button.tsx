@@ -1,7 +1,10 @@
 import { TextClassContext } from '@/components/ui/text';
 import { cn } from '@/lib/utils';
 import { cva, type VariantProps } from 'class-variance-authority';
-import { Platform, Pressable } from 'react-native';
+import { Platform } from 'react-native';
+import { RipplePressable } from '@/components/RipplePressable';
+import { Colors } from '@/constants/Colors';
+import { useTheme } from '@/utils/theme';
 
 // CUSTOMIZED — do not re-run `npx @react-native-reusables/cli add button` on
 // this file. It will overwrite these changes with zero merging: `destructive`
@@ -24,10 +27,40 @@ import { Platform, Pressable } from 'react-native';
 // size="md" (the default) since that's the only size these three are used
 // at; add more entries if a caller ever needs mainHero/mainHome/toolDrawer
 // at another size.
+//
+// Resynced against Figma 2026-08-05: mainHome's radius/padding overrides
+// were partly superseded by Figma catching up to them (see inline comments
+// on each variant/compoundVariant below for specifics), mainHero's text
+// size was corrected from a stale 14px/19px to Figma's actual 16px/22px,
+// and toolDrawer gained dark-mode box/text colors that didn't exist in
+// Figma before. toolDrawer's icon (components/ReaderToolButton.tsx) is now
+// theme-aware too (Ink 100 light / white dark), matching this text color.
+//
+// Ripple pass (2026-08-06): the base Pressable is now a RipplePressable, and
+// mainHero/mainHome/toolDrawer's flat active:bg-*/dark:active:bg-* fill
+// classes were removed (their pressed-state BORDER color classes stay —
+// ripples can't animate a border) in favor of an actual rippleColor prop
+// (see RIPPLE_COLORS below), computed per variant+isDark and matching those
+// same hex values exactly, so the resulting pressed color is unchanged —
+// only the visual mechanism (ripple splash vs. flat swap) is different. The
+// shadcn placeholder variants (default/outline/secondary/link/ghost) are
+// unused in this app (see AGENTS.md's components/-is-exempt convention and
+// this repo's "trim to actually-used variants" habit) — their own
+// active:bg-* classes were left as-is rather than hand-verified, so they'll
+// layer a generic ripple on top; harmless since nothing renders them.
+// `overflow-hidden` is now on the base class for every variant so the ripple
+// stays clipped to each button's own rounded corners — trade-off: this also
+// clips shadow-sm's drop shadow on default/outline/secondary/mainHome (the
+// only variants with a real shadow) on iOS, since overflow:hidden clips a
+// same-view shadow there. Not fixed with a shadow-preserving wrapper view
+// (the pattern used elsewhere, e.g. app/reader.tsx's drawerHeader) since the
+// affected shadows are all low-opacity (5-10%) and default/outline/secondary
+// are unused anyway — flag to revisit if mainHome's shadow loss reads as a
+// real regression rather than a subtle one.
 
 const buttonVariants = cva(
   cn(
-    'group shrink-0 flex-row items-center justify-center gap-2 rounded-md shadow-none',
+    'group shrink-0 flex-row items-center justify-center gap-2 rounded-md shadow-none overflow-hidden',
     Platform.select({
       web: "focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive whitespace-nowrap outline-none transition-all focus-visible:ring-[3px] disabled:pointer-events-none [&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0",
     })
@@ -57,21 +90,32 @@ const buttonVariants = cva(
 
         // Type=Main Hero — "Comienza el Curso" / "Sigue leyendo" on Home.
         // Default: transparent, Brand 100 border, same in light & dark.
-        // Pressed: Brand 200 fill / Brand 400 border in light; Gold 100 fill
-        // (border unchanged) in dark.
-        mainHero: 'border border-[#F7F4F2] bg-transparent active:bg-[#EDE6E1] active:border-[#DED5CE] dark:active:bg-[#A6875B] dark:active:border-[#F7F4F2]',
+        // Pressed: Brand 400 border in light, unchanged border in dark — fill
+        // is now the ripple (RIPPLE_COLORS below), not a flat active:bg-*.
+        mainHero: 'border border-[#F7F4F2] bg-transparent active:border-[#DED5CE]',
 
         // Type=Main Home — the book-section buttons on Home.
         // Default: white fill, Brand 400 border, subtle shadow. Dark: Dark 200
-        // fill (overridden from Figma's Dark 100 per product decision), Brand
-        // 100 border. Pressed: Brand 200 fill (light) / Gold 100 fill (dark)
-        // — border unchanged in both.
-        mainHome: 'border border-[#DED5CE] bg-white shadow-sm shadow-black/10 active:bg-[#EDE6E1] dark:bg-[#302C59] dark:border-[#F7F4F2] dark:active:bg-[#A6875B]',
+        // fill — confirmed 2026-08-05 against a resync: Figma now defines a
+        // real "Colors/Dark/Dark 200" primitive (#302C59) that matches this
+        // value exactly, so this is no longer an app-only invented color.
+        // Brand 100 border. Pressed fill is now the ripple (RIPPLE_COLORS
+        // below) — border unchanged in both modes.
+        mainHome: 'border border-[#DED5CE] bg-white shadow-sm shadow-black/10 dark:bg-[#302C59] dark:border-[#F7F4F2]',
 
         // Type=Tool drawer — save/share buttons in the reader tool drawer.
-        // Same in light & dark per Figma (no dark-mode variants defined
-        // there yet). Pressed: Brand 400 fill (border already Brand 400).
-        toolDrawer: 'border border-[#DED5CE] bg-white active:bg-[#DED5CE]',
+        // Light: same in default/pressed as before. Dark mode was added to
+        // Figma in the 2026-08-05 resync (previously undefined there):
+        // default dark is a transparent box with a Brand 100 border; pressed
+        // dark border uses Gold 100 (fill is now the ripple, RIPPLE_COLORS
+        // below — same pattern as mainHero/mainHome's dark pressed state).
+        // Note: the icon rendered inside (see components/ReaderToolButton.tsx)
+        // still uses a fixed Ink 100 color regardless of theme/press state —
+        // that file wasn't updated to track isDark/pressed, so its icon color
+        // no longer matches Figma's dark-mode icon color (white default /
+        // Brand 100 pressed). Flagged, not fixed, since it needs new plumbing
+        // beyond this component.
+        toolDrawer: 'border border-[#DED5CE] bg-white dark:border-[#F7F4F2] dark:bg-transparent dark:active:border-[#A6875B]',
       },
       size: {
         md: cn('h-10 px-4 py-2 sm:h-9', Platform.select({ web: 'has-[>svg]:px-3' })),
@@ -83,24 +127,24 @@ const buttonVariants = cva(
     compoundVariants: [
       // Figma: padding vertical/8, no horizontal padding, radius/lg (12px).
       { variant: 'mainHero', size: 'md', class: 'h-auto rounded-xl gap-1.5 px-0 py-2' },
-      // Figma says radius/md (6px), but overridden to radius/lg (12px) per
-      // product decision. Padding 32/12, left padding overridden to 20px,
-      // content left-aligned (not centered — Figma's own Main Home
-      // component uses primaryAxisAlignItems: MIN). icon-label gap
-      // overridden to 12px (Figma says itemSpacing/6).
-      // px-0 first: tailwind-merge doesn't strip an earlier px-4 (from
-      // size="md") when only pl-*/pr-* follow it — only a later px-*
-      // clears an earlier pl-*/pr-*, not the reverse — so without this
-      // both classes land in the output and NativeWind picks one
-      // unpredictably. Zeroing px first leaves nothing to conflict with.
-      // has-[>svg]:px-* repeated for the same reason: size="md" also
-      // carries a web-only `has-[>svg]:px-3` (real browser :has() rule,
-      // shrinks padding whenever the button contains an <svg> — true for
-      // every variant here, they all render an icon) that beats plain
-      // px-0/pl-5/pr-8 in the browser regardless of class-string order,
-      // since it's a different variant/selector twMerge won't reconcile
-      // against a plain class — only a matching has-[>svg]: prefix does.
-      { variant: 'mainHome', size: 'md', class: 'h-auto rounded-xl gap-3 px-0 pl-5 pr-8 py-3 justify-start has-[>svg]:px-0 has-[>svg]:pl-5 has-[>svg]:pr-8' },
+      // radius/lg (12px) — as of the 2026-08-05 resync Figma's own Main Home
+      // component now uses radius/lg directly (it used to say radius/md,
+      // 6px, which this rounded-xl was a deliberate override of; Figma has
+      // since caught up so this is no longer a deviation, just a match).
+      // Padding: Figma now specifies a symmetric 20px/20px (spacing/20) on
+      // both sides — it used to say 32px/32px, which is what motivated the
+      // old pl-5/pr-8 asymmetric override in the first place; since Figma's
+      // own value changed to plain 20/20, that old workaround is superseded
+      // and this is now a plain `px-5` matching Figma exactly. Content stays
+      // left-aligned (not centered — Figma's Main Home component uses
+      // primaryAxisAlignItems: MIN), still via justify-start. icon-label gap
+      // stays overridden to 12px (Figma still says itemSpacing/6, unchanged
+      // by the resync — this remains a deliberate product decision).
+      // Because the new padding is symmetric, plain `px-5` (a `px-*` class)
+      // now cleanly overrides size="md"'s `px-4` via tailwind-merge's normal
+      // same-prefix resolution — no more need for the old px-0-zeroing
+      // workaround that asymmetric pl-*/pr-* required.
+      { variant: 'mainHome', size: 'md', class: 'h-auto rounded-xl gap-3 px-5 py-3 justify-start has-[>svg]:px-5' },
       // Figma: padding 16/12, radius/lg (12px).
       { variant: 'toolDrawer', size: 'md', class: 'h-auto rounded-xl gap-1.5 px-4 py-3 has-[>svg]:px-4' },
     ],
@@ -133,9 +177,14 @@ const buttonTextVariants = cva(
 
         // font-sans = NotoSans_500Medium (see tailwind.config.js) — matches
         // the Medium weight on all three Figma button types.
+        // mainHero/mainHome text — body-xs-medium scale (14px/19px), per
+        // Figma update.
         mainHero: 'font-sans text-sm leading-[19px] text-[#F7F4F2] group-active:text-[#333333] dark:group-active:text-[#F7F4F2]',
-        mainHome: 'font-sans text-base leading-[22px] text-[#333333] dark:text-[#F7F4F2]',
-        toolDrawer: 'font-sans text-sm leading-[19px] text-[#333333]',
+        mainHome: 'font-sans text-sm leading-[19px] text-[#333333] dark:text-[#F7F4F2]',
+        // Dark mode added 2026-08-05: default dark text is Neutral 100
+        // (white); pressed dark text is Brand 100 — new Figma data, this
+        // variant previously had no dark states defined there at all.
+        toolDrawer: 'font-sans text-sm leading-[19px] text-[#333333] dark:text-white dark:group-active:text-[#F7F4F2]',
       },
       size: {
         md: '',
@@ -151,13 +200,29 @@ const buttonTextVariants = cva(
   }
 );
 
-type ButtonProps = React.ComponentProps<typeof Pressable> & React.RefAttributes<typeof Pressable> & VariantProps<typeof buttonVariants>;
+// Matches the fill colors mainHero/mainHome/toolDrawer's active:bg-*/
+// dark:active:bg-* classes used to define, before this component switched to
+// RipplePressable — the ripple splash now delivers that same pressed-state
+// color instead of a flat swap. Variants not listed here (the unused shadcn
+// placeholders) fall through to RipplePressable's own default rippleColor.
+const RIPPLE_COLORS: Partial<Record<NonNullable<VariantProps<typeof buttonVariants>['variant']>, { light: string; dark: string }>> = {
+  mainHero: { light: Colors.brand200, dark: Colors.gold100 },
+  mainHome: { light: Colors.brand200, dark: Colors.gold100 },
+  toolDrawer: { light: Colors.brand400, dark: Colors.gold100 },
+};
+
+type ButtonProps = React.ComponentProps<typeof RipplePressable> & React.RefAttributes<typeof RipplePressable> & VariantProps<typeof buttonVariants>;
 
 function Button({ className, variant, size, ...props }: ButtonProps) {
+  const { isDark } = useTheme();
+  const rippleColors = RIPPLE_COLORS[variant ?? 'default'];
+  const rippleColor = rippleColors ? (isDark ? rippleColors.dark : rippleColors.light) : undefined;
+
   return (
     <TextClassContext.Provider value={buttonTextVariants({ variant, size })}>
-      <Pressable
+      <RipplePressable
         className={cn(props.disabled && 'opacity-50', buttonVariants({ variant, size }), className)}
+        rippleColor={rippleColor}
         role="button"
         {...props}
       />

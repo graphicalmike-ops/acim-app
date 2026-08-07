@@ -1,21 +1,42 @@
 import { useState, useCallback, useRef } from 'react';
-import { View, StyleSheet, Animated, useWindowDimensions } from 'react-native';
+import { StyleSheet, Animated, useWindowDimensions, Share, ToastAndroid, Platform } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
-import { SavedItemRow } from '@/components/SavedItemRow';
+import { SavedItem, useSavedRowColors } from '@/components/ui/saved-item';
+import { UIMenu } from '@/components/UIMenu';
+import { ConfirmDialog, ConfirmDialogContent } from '@/components/ConfirmDialog';
 import { AppScrollView } from '@/components/AppScrollView';
+import { LoadingBar } from '@/components/ui/loading-bar';
 import { NavBar } from '@/components/NavBar';
 import { useTheme, useThemeColors } from '@/utils/theme';
-import { useBookmarks, bookmarkHref } from '@/utils/bookmarks';
-import { Colors } from '@/constants/Colors';
-import { Spacing, BorderWidth } from '@/constants/Tokens';
+import { useBookmarks, bookmarkHref, SavedBookmark } from '@/utils/bookmarks';
+import { getVersesText } from '@/utils/content';
+import { formatSavedDate } from '@/utils/text';
+import { Spacing } from '@/constants/Tokens';
 
 export default function BookmarksScreen() {
   const { isDark } = useTheme();
   const t = useThemeColors();
+  const { iconColor } = useSavedRowColors();
   const { width: screenWidth } = useWindowDimensions();
-  const { bookmarks } = useBookmarks();
+  const { bookmarks, deleteBookmark } = useBookmarks();
+
+  const handleShare = useCallback((item: SavedBookmark) => {
+    const verseText = getVersesText(item.bookId, item.anchor, item.paragraph, item.verses ?? []);
+    const message = verseText ? `${verseText}\n\n${item.notation}` : `${item.notation} — ${item.note}`;
+    Share.share({ message });
+  }, []);
+
+  const handleDelete = useCallback((item: SavedBookmark) => {
+    deleteBookmark(item.id);
+    if (Platform.OS === 'android') ToastAndroid.show('Eliminado', ToastAndroid.SHORT);
+  }, [deleteBookmark]);
+
+  // "Eliminar" in the row's UIMenu opens this confirm step instead of
+  // deleting straight away — holds the pending item until the user confirms
+  // or cancels in the ConfirmDialog rendered below.
+  const [deleteTarget, setDeleteTarget] = useState<SavedBookmark | null>(null);
 
   const [navigating, setNavigating] = useState(false);
   const [loadBarVisible, setLoadBarVisible] = useState(false);
@@ -49,28 +70,43 @@ export default function BookmarksScreen() {
           style={[styles.scrollView, { backgroundColor: t.backgroundColor }]}
         >
           {sortedBookmarks.map((item) => (
-            <SavedItemRow
+            <SavedItem
               key={item.id}
-              item={item}
+              label={item.name ? `${item.notation} - ${item.name}` : item.notation}
+              date={formatSavedDate(item.date)}
+              note={item.note}
               onPress={() => {
                 if (navigating) return;
                 setNavigating(true);
                 startLoadBar();
                 setTimeout(() => router.push(bookmarkHref(item)), 200);
               }}
+              actionsSlot={
+                <UIMenu
+                  iconColor={iconColor}
+                  actions={[
+                    { id: 'share', title: 'Compartir', onPress: () => handleShare(item) },
+                    { id: 'delete', title: 'Eliminar', destructive: true, onPress: () => setDeleteTarget(item) },
+                  ]}
+                />
+              }
             />
           ))}
         </AppScrollView>
-        {loadBarVisible && (
-          <View style={[styles.loadBarTrack, { backgroundColor: isDark ? Colors.transparent : t.darkOutline }]}>
-            <Animated.View style={[
-              styles.loadBarFill,
-              { backgroundColor: isDark ? t.darkerBackgroundColor : t.fontColorPrimary },
-              { transform: [{ translateX: loadBarAnim.interpolate({ inputRange: [0, 1], outputRange: [-screenWidth, 0] }) }] },
-            ]} />
-          </View>
-        )}
+        <LoadingBar visible={loadBarVisible} progress={loadBarAnim} screenWidth={screenWidth} />
       </SafeAreaView>
+
+      <ConfirmDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+        <ConfirmDialogContent
+          title="¿Eliminar verso guardado?"
+          description="Esta acción no se puede deshacer."
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={() => {
+            if (deleteTarget) handleDelete(deleteTarget);
+            setDeleteTarget(null);
+          }}
+        />
+      </ConfirmDialog>
     </SafeAreaView>
   );
 }
@@ -87,15 +123,5 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingBottom: Spacing[40],
-  },
-  loadBarTrack: {
-    height: BorderWidth.lg,
-    overflow: 'hidden',
-  },
-  loadBarFill: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: BorderWidth.lg,
   },
 });

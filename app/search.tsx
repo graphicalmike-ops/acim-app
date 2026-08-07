@@ -1,17 +1,17 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, Animated, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router, useFocusEffect } from 'expo-router';
-import { RipplePressable } from '@/components/RipplePressable';
-import { SearchBar } from '@/components/SearchBar';
+import { SearchInput } from '@/components/ui/search-input';
 import { NavBar } from '@/components/NavBar';
-import { BookSectionHeading } from '@/components/BookSectionHeading';
-import { AppScrollView } from '@/components/AppScrollView';
+import { IndexTitleL1 } from '@/components/ui/index-item';
+import { SearchItem } from '@/components/ui/search-item';
+import { LoadingBar } from '@/components/ui/loading-bar';
+import { AppSectionList } from '@/components/AppSectionList';
 import { useTheme, useThemeColors } from '@/utils/theme';
 import { UIFonts } from '@/constants/Typography';
-import { Colors } from '@/constants/Colors';
-import { Spacing, BorderWidth } from '@/constants/Tokens';
+import { Spacing } from '@/constants/Tokens';
 import { searchContent, formatRouteId, nearestTitle, splitSnippet, truncateSnippetSegments, SearchResult } from '@/utils/search';
 
 // No pagination — every match is fetched in one query. The corpus is only
@@ -32,15 +32,27 @@ const BOOK_TITLES: Record<string, string> = {
   song: 'El Canto de la Oración',
 };
 
-function groupByBook(results: SearchResult[]): { book: string; title: string; items: SearchResult[] }[] {
-  const groups = new Map<string, SearchResult[]>();
-  for (const r of results) {
-    if (!groups.has(r.book)) groups.set(r.book, []);
-    groups.get(r.book)!.push(r);
+// Display-ready row, derived from a raw SearchResult once per results
+// change (not per render) — see the `displayResults` useMemo below.
+type DisplayResult = {
+  key: string;
+  book: string;
+  label: string;
+  subtitleSegments: { text: string; highlighted: boolean }[];
+  result: SearchResult;
+};
+
+type SearchSection = { book: string; title: string; data: DisplayResult[] };
+
+function groupByBook(items: DisplayResult[]): SearchSection[] {
+  const groups = new Map<string, DisplayResult[]>();
+  for (const item of items) {
+    if (!groups.has(item.book)) groups.set(item.book, []);
+    groups.get(item.book)!.push(item);
   }
   return BOOK_ORDER
     .filter((book) => groups.has(book))
-    .map((book) => ({ book, title: BOOK_TITLES[book] ?? book, items: groups.get(book)! }));
+    .map((book) => ({ book, title: BOOK_TITLES[book] ?? book, data: groups.get(book)! }));
 }
 
 function formatResultsCount(count: number): string {
@@ -79,8 +91,12 @@ export default function SearchScreen() {
   // Search only fires on explicit submission (search-icon tap or the
   // keyboard's search key) — not as the user types.
   const handleSearch = useCallback(() => {
-    setSubmittedQuery(query.trim());
-  }, [query]);
+    const trimmed = query.trim();
+    if (trimmed && trimmed !== submittedQuery) {
+      setSearching(true);
+    }
+    setSubmittedQuery(trimmed);
+  }, [query, submittedQuery]);
 
   const handleClearSearch = useCallback(() => {
     setSubmittedQuery('');
@@ -118,14 +134,31 @@ export default function SearchScreen() {
     setTimeout(() => router.push(`/reader?book=${result.book}&anchor=${anchor}${paragraphParam}${queryParam}`), 200);
   }, [navigating, startLoadBar, submittedQuery]);
 
-  const groups = groupByBook(results);
+  // Derived, display-ready rows — recomputed only when `results` itself
+  // changes (a new page arrives), never on every keystroke in the search
+  // box (query state is separate from submittedQuery/results). This is what
+  // keeps typing the next search smooth while old results are still shown.
+  const displayResults = useMemo<DisplayResult[]>(() => results.map((result, idx) => {
+    const segments = truncateSnippetSegments(splitSnippet(result.snippet), EXCERPT_MAX_CHARS);
+    const title = nearestTitle(result);
+    return {
+      key: `${result.anchor}-${result.paragraph}-${idx}`,
+      book: result.book,
+      label: title ? `${title} - ${formatRouteId(result)}` : formatRouteId(result),
+      subtitleSegments: segments,
+      result,
+    };
+  }), [results]);
+
+  const sections = useMemo(() => groupByBook(displayResults), [displayResults]);
 
   return (
     <SafeAreaView style={[styles.topArea, { backgroundColor: t.darkerBackgroundColor }]} edges={['top']}>
       <SafeAreaView style={[styles.container, { backgroundColor: t.backgroundColor }]} edges={['bottom']}>
         <StatusBar style={isDark ? 'light' : 'dark'} backgroundColor={t.darkerBackgroundColor} />
-        <NavBar onBack={() => router.back()}>
-          <SearchBar
+        <NavBar onBack={() => router.back()} title="Búsqueda" />
+        <View style={[styles.searchBar, { backgroundColor: t.darkerBackgroundColor }]}>
+          <SearchInput
             value={query}
             onChangeText={setQuery}
             onSubmit={handleSearch}
@@ -134,75 +167,42 @@ export default function SearchScreen() {
             placeholder="Buscar"
             autoFocus
           />
-        </NavBar>
+        </View>
 
-        <AppScrollView
-          contentContainerStyle={styles.content}
-          style={[styles.scrollView, { backgroundColor: t.backgroundColor }, searching ? { pointerEvents: 'none' } : null]}
-          keyboardShouldPersistTaps="handled"
-        >
-          {submittedQuery.length > 0 && (
+        <AppSectionList<DisplayResult, SearchSection>
+          sections={searching ? [] : sections}
+          keyExtractor={(item) => item.key}
+          renderSectionHeader={({ section }) => <IndexTitleL1 label={section.title} font={UIFonts.capsBodyXsMedium} />}
+          renderItem={({ item }) => (
+            <SearchItem
+              label={item.label}
+              subtitle={item.subtitleSegments.map((seg, i) => (
+                <Text key={i} style={seg.highlighted ? styles.itemSubtitleBold : undefined}>
+                  {seg.text}
+                </Text>
+              ))}
+              onPress={() => openResult(item.result)}
+            />
+          )}
+          stickySectionHeadersEnabled={false}
+          ListHeaderComponent={submittedQuery.length > 0 ? (
             <View style={styles.headerItem}>
               <Text style={[styles.titleL1, { color: t.fontColorGray }]}>
                 {searching ? 'Buscando…' : formatResultsCount(results.length)}
               </Text>
             </View>
-          )}
-
-          {!searching && submittedQuery.length > 0 && results.length === 0 && (
+          ) : null}
+          ListEmptyComponent={!searching && submittedQuery.length > 0 ? (
             <View style={styles.emptyState}>
               <Text style={[styles.emptyText, { color: t.fontColorGray }]}>No se encontraron resultados.</Text>
             </View>
-          )}
+          ) : null}
+          contentContainerStyle={styles.content}
+          style={[styles.scrollView, { backgroundColor: t.backgroundColor }, searching ? { pointerEvents: 'none' } : null]}
+          keyboardShouldPersistTaps="handled"
+        />
 
-          {!searching && groups.map((group) => (
-            <View key={group.book}>
-              <BookSectionHeading label={group.title} />
-              {group.items.map((result, idx) => {
-                const segments = truncateSnippetSegments(splitSnippet(result.snippet), EXCERPT_MAX_CHARS);
-                const title = nearestTitle(result);
-                return (
-                  <RipplePressable
-                    key={`${result.anchor}-${result.paragraph}-${idx}`}
-                    style={styles.item}
-                    rippleColor={t.darkerBackgroundColor}
-                    onPress={() => openResult(result)}
-                  >
-                    {() => (
-                      <>
-                        <View style={styles.itemRow}>
-                          <View style={styles.itemText}>
-                            <Text style={[styles.itemLabel, { color: t.fontColorPrimary }]}>
-                              {title ? `${title} - ${formatRouteId(result)}` : formatRouteId(result)}
-                            </Text>
-                            <Text style={[styles.itemSubtitle, { color: t.fontColorGray }]}>
-                              {segments.map((seg, i) => (
-                                <Text key={i} style={seg.highlighted ? styles.itemSubtitleBold : undefined}>
-                                  {seg.text}
-                                </Text>
-                              ))}
-                            </Text>
-                          </View>
-                        </View>
-                        <View style={[styles.divider, { backgroundColor: t.darkOutline }]} />
-                      </>
-                    )}
-                  </RipplePressable>
-                );
-              })}
-            </View>
-          ))}
-        </AppScrollView>
-
-        {loadBarVisible && (
-          <View style={[styles.loadBarTrack, { backgroundColor: isDark ? Colors.transparent : t.darkOutline }]}>
-            <Animated.View style={[
-              styles.loadBarFill,
-              { backgroundColor: isDark ? t.darkerBackgroundColor : t.fontColorPrimary },
-              { transform: [{ translateX: loadBarAnim.interpolate({ inputRange: [0, 1], outputRange: [-screenWidth, 0] }) }] },
-            ]} />
-          </View>
-        )}
+        <LoadingBar visible={loadBarVisible} progress={loadBarAnim} screenWidth={screenWidth} />
       </SafeAreaView>
     </SafeAreaView>
   );
@@ -211,19 +211,12 @@ export default function SearchScreen() {
 const styles = StyleSheet.create({
   topArea: { flex: 1 },
   container: { flex: 1 },
+  searchBar: { paddingHorizontal: Spacing[24], paddingVertical: Spacing[12] },
   scrollView: { flex: 1 },
   content: { paddingBottom: Spacing[40] },
   headerItem: { paddingTop: Spacing[24], paddingBottom: Spacing[12], paddingHorizontal: Spacing[24] },
-  titleL1: UIFonts.capsBodyXsRegular,
+  titleL1: UIFonts.capsBodyXsSemibold,
   emptyState: { paddingHorizontal: Spacing[24], paddingTop: Spacing[12] },
   emptyText: { ...UIFonts.bodyXsRegular },
-  item: { overflow: 'hidden', paddingLeft: Spacing[24], paddingRight: Spacing[24], paddingTop: Spacing[12], gap: Spacing[12] },
-  itemRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing[12] },
-  itemText: { flex: 1, gap: Spacing[2] },
-  itemLabel: { ...UIFonts.bodyXsRegular },
-  itemSubtitle: { ...UIFonts.body2xsRegular },
   itemSubtitleBold: { fontFamily: UIFonts.body2xsBold.fontFamily },
-  divider: { height: BorderWidth.sm },
-  loadBarTrack: { height: BorderWidth.lg, overflow: 'hidden' },
-  loadBarFill: { position: 'absolute', left: 0, right: 0, height: BorderWidth.lg },
 });

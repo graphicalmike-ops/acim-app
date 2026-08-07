@@ -38,3 +38,22 @@ export const Spacing = {
   96:   96,   // Figma: spacing/96
   128:  128,  // Figma: spacing/128
 } as const;
+
+// App-defined (not a Figma variable) — composite `boxShadow` CSS-value
+// strings, for RN 0.74+/New Arch's cross-platform `boxShadow` style prop.
+// Not usable inside a NativeWind `className` directly (Tailwind needs the
+// class string itself statically written out, not a JS value plugged in at
+// runtime) — components consuming this via className instead spell out the
+// equivalent `shadow-[...]` arbitrary-value class literally, with a comment
+// pointing back here so the two stay in sync if this value changes.
+export const Shadows = {
+  // Drawer slides up from the bottom of the screen, so its shadow points
+  // *up* (offset x0/y-2) to read as floating above the reader content
+  // behind it. Used by app/reader.tsx's drawer header.
+  drawer: '0px -2px 4px 0px rgba(0,0,0,0.15)',
+  // Menu/dialog drop down over their trigger/backdrop, so this shadow points
+  // *down* (offset x0/y2) — same blur/spread as `drawer`, opposite
+  // direction, higher opacity. Used by components/UIMenu.tsx's popup and
+  // ConfirmDialog.tsx's card.
+  menu: '0px 2px 4px 0px rgba(0,0,0,0.25)',
+} as const;

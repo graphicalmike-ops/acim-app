@@ -3,6 +3,7 @@ import { Colors } from '@/constants/Colors';
 import { BookmarkIcon, ShareIcon } from '@/components/Icons';
 import { Button } from '@/components/ui/button';
 import { Text as ButtonText } from '@/components/ui/text';
+import { useTheme } from '@/utils/theme';
 
 type Variant = 'save' | 'share';
 
@@ -17,16 +18,18 @@ const LABELS: Record<Variant, string> = {
   share: 'Compartir',
 };
 
-// Icon color is fixed (Ink 100) rather than pulled from the app's theme —
-// Figma's Tool drawer button has no dark-mode variant, box stays white and
-// text/icon stay Ink 100 regardless of isDark, same rationale as
-// NoteInput/SearchBar.
+// Icon color now follows the theme (Ink 100 light / white dark), matching
+// the toolDrawer button's own text color — previously fixed at Ink 100 in
+// both modes, which read as invisible against the dark-mode box's
+// transparent/dark background (see components/ui/button.tsx's toolDrawer
+// gap note).
 export function ReaderToolButton({ variant, onPress, style }: Props) {
+  const { isDark } = useTheme();
   const Icon = variant === 'save' ? BookmarkIcon : ShareIcon;
 
   return (
     <Button variant="toolDrawer" style={style} onPress={onPress}>
-      <Icon size={16} color={Colors.ink100} />
+      <Icon size={16} color={isDark ? Colors.neutral100 : Colors.ink100} />
       <ButtonText>{LABELS[variant]}</ButtonText>
     </Button>
   );

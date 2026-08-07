@@ -10,6 +10,7 @@ import { TheoryIcon, ExercizesIcon, TeacherIcon, SupplementalIcon, TipLightIcon,
 import { HeroLogo } from '@/components/HeroLogo';
 import { Button } from '@/components/ui/button';
 import { IconButton } from '@/components/ui/icon-button';
+import { LoadingBar } from '@/components/ui/loading-bar';
 import { Text as ButtonText } from '@/components/ui/text';
 import { loadLastRead, clearLastRead, LastReadState } from '@/utils/lastRead';
 import { useTheme } from '@/utils/theme';
@@ -116,9 +117,14 @@ export default function HomeScreen() {
           />
           <View style={[StyleSheet.absoluteFill, styles.heroOverlay]} />
 
+          {/* Donation/tip icon hidden — may be restored later. Currently double-wired
+              to handleResetAll for dev testing; that reset flow has no other trigger
+              now that this is hidden. */}
+          {/*
           <View style={styles.heroTipButton}>
             <IconButton icon={TipLightIcon} surface="transparent" onPress={handleResetAll} />
           </View>
+          */}
 
           <View style={styles.heroThemeToggle}>
             <IconButton icon={isDark ? LightModeIcon : DarkModeIcon} surface="transparent" onPress={toggleTheme} />
@@ -176,15 +182,12 @@ export default function HomeScreen() {
           ))}
         </View>
       </ScrollView>
-      {loadBarVisible && (
-        <View style={[styles.loadBarTrack, { bottom: bottomInset, backgroundColor: isDark ? Colors.transparent : Colors.brand400 }]}>
-          <Animated.View style={[
-            styles.loadBarFill,
-            { backgroundColor: isDark ? Colors.gold100 : Colors.ink100 },
-            { transform: [{ translateX: loadBarAnim.interpolate({ inputRange: [0, 1], outputRange: [-screenWidth, 0] }) }] },
-          ]} />
-        </View>
-      )}
+      <LoadingBar
+        visible={loadBarVisible}
+        progress={loadBarAnim}
+        screenWidth={screenWidth}
+        style={[styles.loadBarPosition, { bottom: bottomInset }]}
+      />
     </SafeAreaView>
   );
 }
@@ -225,8 +228,8 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     zIndex: 1,
-    paddingTop: Spacing[10],
-    paddingLeft: Spacing[10],
+    paddingTop: Spacing[6],
+    paddingLeft: Spacing[6],
   },
   heroThemeToggle: {
     position: 'absolute',
@@ -234,7 +237,7 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 1,
     paddingTop: Spacing[10],
-    paddingRight: Spacing[10],
+    paddingRight: Spacing[6],
   },
   heroContent: {
     flex: 1,
@@ -261,10 +264,9 @@ const styles = StyleSheet.create({
     top: 0,
     right: 0,
     flexDirection: 'row',
-    gap: Spacing[8],
     zIndex: 1,
-    paddingTop: Spacing[10],
-    paddingRight: Spacing[10],
+    paddingTop: Spacing[4],
+    paddingRight: Spacing[4],
   },
   highlightMeta: {
     gap: Spacing[8],
@@ -286,17 +288,9 @@ const styles = StyleSheet.create({
   buttons: {
     gap: Spacing[12],
   },
-  loadBarTrack: {
+  loadBarPosition: {
     position: 'absolute',
     left: 0,
     right: 0,
-    height: BorderWidth.lg,
-    overflow: 'hidden',
-  },
-  loadBarFill: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: BorderWidth.lg,
   },
 });

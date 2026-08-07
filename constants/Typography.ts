@@ -20,7 +20,7 @@ export const UIFonts = {
   body3xsRegular: { fontFamily: 'NotoSans_400Regular', fontSize: 11, lineHeight: 15 }, // Figma: UI fonts/body-3xs-regular
   // Figma: UI fonts / caps-body-xs-* — small caps variants (approximated with uppercase)
   capsBodyXsSemibold: { fontFamily: 'NotoSans_600SemiBold', fontSize: 14, lineHeight: 19, textTransform: 'uppercase' as const }, // Figma: UI fonts/caps-body-xs-semibold
-  capsBodyXsRegular:  { fontFamily: 'NotoSans_500Medium', fontSize: 14, lineHeight: 19, textTransform: 'uppercase' as const },   // Figma: UI fonts/caps-body-xs-medium (name kept as "Regular" — no true small-caps Regular style exists in Figma)
+  capsBodyXsMedium:   { fontFamily: 'NotoSans_500Medium', fontSize: 14, lineHeight: 19, textTransform: 'uppercase' as const },   // Figma: UI fonts/caps-body-xs-medium
 } as const;
 
 // Book fonts (Lora) — for chapter/section/lesson titles and body copy in the Reader
