@@ -1,5 +1,6 @@
 import '../global.css';
 import { useEffect } from 'react';
+import { AppState } from 'react-native';
 import { Stack, usePathname } from 'expo-router';
 import * as NavigationBar from 'expo-navigation-bar';
 import { StatusBar } from 'expo-status-bar';
@@ -72,13 +73,27 @@ export default function RootLayout() {
     }
   }, [fontsLoaded, fontError]);
 
-  // TEMPORARY (testing): fires 10s after every app open, no gating.
-  // Replace with a real trigger point (e.g. donation flow, post-lesson) later.
+  // Review trigger #1: 15 minutes of active (foregrounded) in-app use.
+  // Ticks a counter every 10s but only while AppState is 'active', so time
+  // spent backgrounded doesn't count toward the threshold — this resets on
+  // a full app restart (not persisted across sessions); requestAppReview()
+  // itself is the one-time-ever gate (see utils/storeReview.ts), so this
+  // timer firing more than once across restarts is harmless.
+  // See also: app/reader.tsx's chapter-reached trigger (#2) — whichever
+  // fires first wins, since requestAppReview() no-ops after the first call.
   useEffect(() => {
-    const timer = setTimeout(() => {
-      requestAppReview();
-    }, 10000);
-    return () => clearTimeout(timer);
+    const THRESHOLD_MS = 15 * 60 * 1000;
+    const TICK_MS = 10000;
+    let activeMs = 0;
+    const interval = setInterval(() => {
+      if (AppState.currentState !== 'active') return;
+      activeMs += TICK_MS;
+      if (activeMs >= THRESHOLD_MS) {
+        requestAppReview();
+        clearInterval(interval);
+      }
+    }, TICK_MS);
+    return () => clearInterval(interval);
   }, []);
 
   if (!fontsLoaded && !fontError) {

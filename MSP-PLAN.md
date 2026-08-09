@@ -224,6 +224,19 @@ keep-rules for reflection-reliant modules (**expo-sqlite/FTS5**, reanimated, rea
 `@react-native-menu/menu`). R8 needs a **release-build** device test. `reader.tsx` perf: consider
 splitting the 78KB file + memoizing block renderers (React Compiler helps but size is worth addressing).
 
+**In-app review trigger — real triggers wired 2026-08-08** (was 10s-after-every-open test wiring
+2026-08-07). Two independent triggers, whichever fires first wins: (1) `app/_layout.tsx` — 15 minutes of
+active (foregrounded) in-app use, tracked via `AppState`, resets on a full app restart since it isn't
+persisted; (2) `app/reader.tsx` — reaching Theory Ch.1 §II "La revelación, el tiempo y los milagros"
+(anchor `theory-ch1-s2`), whether landed on directly or scrolled into. `requestAppReview()`
+(`utils/storeReview.ts`) is now itself the one-time-ever gate — persisted via AsyncStorage
+(`acim_review_requested`), so it silently no-ops on every call after the first real request, regardless of
+which trigger or how many app restarts. Even installed via a real Play Store track (internal testing,
+confirmed 2026-08-08), the dialog still never visibly appeared during testing — Google's Play Core
+In-App Review API provides no guarantee it'll ever show even under ideal conditions (undocumented
+per-account quota/algorithm), so this remains untestable/unverifiable from the app side. Not spending
+further effort chasing this; the triggers themselves are correct and that's what's actually controllable.
+
 ---
 
 ## Verification (RNR foundation deliverable)

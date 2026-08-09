@@ -156,7 +156,12 @@ export default function ContentsScreen() {
           style={[styles.scrollView, { backgroundColor: t.backgroundColor }]}
           onScroll={(e) => { scrollY.current = e.nativeEvent.contentOffset.y; }}
         >
-          <IndexAccordionGroup value={openAccordion ?? undefined} onValueChange={handleAccordionValueChange}>
+          {/* '' (not undefined) for "nothing open" — @rn-primitives/accordion's
+              useControllableState treats an undefined `value` prop as a signal
+              to fall back to its own internal uncontrolled state for that
+              render, which desyncs from openAccordion and used to require an
+              extra tap to collapse an open item. */}
+          <IndexAccordionGroup value={openAccordion ?? ''} onValueChange={handleAccordionValueChange}>
             {items.map((item) => {
               if (item.type === 'Title-L1') {
                 return null;

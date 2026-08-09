@@ -81,7 +81,21 @@ export function TextInputField({ value, onChangeText, onSubmit, placeholder = 'I
       <TextInput
         style={[styles.input, { color: textColor }]}
         value={value}
-        onChangeText={onChangeText}
+        onChangeText={(text) => {
+          // Android ignores returnKeyType/onSubmitEditing entirely on
+          // multiline inputs — Enter always inserts a literal newline at the
+          // OS level, regardless of the key's icon. Intercepting a
+          // trailing '\n' here (rather than trying to configure it away via
+          // props) is the standard cross-platform workaround: treat Enter-
+          // at-the-end-of-text as "submit" instead of writing the newline
+          // into the note. Only catches Enter at the end of the text, not
+          // mid-text — acceptable for a short note field.
+          if (text.endsWith('\n')) {
+            onSubmit();
+            return;
+          }
+          onChangeText(text);
+        }}
         onSubmitEditing={onSubmit}
         placeholder={placeholder}
         placeholderTextColor={placeholderColor}

@@ -25,6 +25,7 @@ import { Radius, Spacing, Shadows } from '@/constants/Tokens';
 import { UIFonts, BookFonts } from '@/constants/Typography';
 import { Sentence, ContentBlock, CONTENT, resolveContentKey, getVersesText } from '@/utils/content';
 import { useBookmarks, BookId as SavedBookId, bookmarkHref, SavedBookmark } from '@/utils/bookmarks';
+import { requestAppReview } from '@/utils/storeReview';
 
 const NO_HIGHLIGHT_TERMS: string[] = [];
 
@@ -156,6 +157,424 @@ function getMarginTop(type: string, prevType: string | null, isFirst: boolean): 
   if (prevType === 'lesson-heading' || prevType === 'chapter-heading' || prevType === 'lesson-group-heading')  return 40;
   return 20;
 }
+
+const SUPERSCRIPT: Record<string, string> = {
+  '0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹',
+};
+const SUPERSCRIPT_ALPHA: Record<string, string> = {
+  'a':'ᵃ','b':'ᵇ','c':'ᶜ','d':'ᵈ','e':'ᵉ','f':'ᶠ','g':'ᵍ','h':'ʰ',
+  'i':'ⁱ','j':'ʲ','k':'ᵏ','l':'ˡ','m':'ᵐ','n':'ⁿ','o':'ᵒ','p':'ᵖ',
+  'r':'ʳ','s':'ˢ','t':'ᵗ','u':'ᵘ','v':'ᵛ','w':'ʷ','x':'ˣ','y':'ʸ','z':'ᶻ',
+};
+function toSuperscript(n: number | string): string {
+  if (typeof n === 'string') return SUPERSCRIPT_ALPHA[n] ?? n;
+  return String(n).split('').map(d => SUPERSCRIPT[d]).join('');
+}
+
+const NT_NOTES: Record<string, string> = {
+  unicidad: 'A la palabra "unicidad", que de acuerdo con el Diccionario de la Real Academia Española significa "calidad de único", se le ha dado aquí un nuevo significado. En la presente obra se ha utilizado "unicidad" exclusivamente para traducir la palabra inglesa "oneness" en su acepción de: "calidad, estado o hecho de ser uno".',
+  impecables: 'La palabra "impecable" no tiene aquí el significado más usual de "intachable, irreprochable", sino el más literal de "sin pecado".',
+  impecablemente: 'La palabra "impecable" no tiene aquí el significado más usual de "intachable, irreprochable", sino el más literal de "sin pecado".',
+  impecabilidad: 'La palabra "impecable" no tiene aquí el significado más usual de "intachable, irreprochable", sino el más literal de "sin pecado".',
+  impecable: 'La palabra "impecable" no tiene aquí el significado más usual de "intachable, irreprochable", sino el más literal de "sin pecado".',
+  especialismo: 'Se ha utilizado "especialismo" para traducir el término inglés "specialness", cuyo significado es "la calidad, condición, estado o deseo de ser especial".',
+};
+
+function extractSectionLabel(title: string): string {
+  const m = title.match(/^([IVX]+|[A-Z]|[0-9]+)\./);
+  if (!m) return '';
+  return `Secc. ${m[1].toUpperCase()}`;
+}
+
+// Builds a case/accent-folded copy of `text` where each entry lines up 1:1
+// with `chars` (text split by code point), so match ranges found in the
+// normalized string can be sliced straight back out of the original.
+function normalizeForHighlight(text: string): { normalized: string; chars: string[] } {
+  const chars = Array.from(text);
+  const normalized = chars
+    .map((ch) => {
+      const stripped = ch.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      return (stripped[0] ?? ch).toLowerCase();
+    })
+    .join('');
+  return { normalized, chars };
+}
+
+function isWordChar(ch: string | undefined): boolean {
+  return !!ch && /[\p{L}\p{N}]/u.test(ch);
+}
+
+// Finds whole-word matches for each (already-normalized) term, mirroring
+// FTS5's prefix-match semantics: a term matches any word that *starts* with
+// it, and the whole word gets highlighted — not just the typed prefix.
+function findHighlightRanges(normalized: string, terms: string[]): [number, number][] {
+  const ranges: [number, number][] = [];
+  for (const term of terms) {
+    if (!term) continue;
+    let from = 0;
+    let idx: number;
+    while ((idx = normalized.indexOf(term, from)) !== -1) {
+      from = idx + 1;
+      if (isWordChar(normalized[idx - 1])) continue; // mid-word, not a token start
+      let end = idx + term.length;
+      while (isWordChar(normalized[end])) end++;
+      ranges.push([idx, end]);
+    }
+  }
+  if (!ranges.length) return ranges;
+  ranges.sort((a, b) => a[0] - b[0]);
+  const merged: [number, number][] = [ranges[0]];
+  for (const [s, e] of ranges.slice(1)) {
+    const last = merged[merged.length - 1];
+    if (s <= last[1]) last[1] = Math.max(last[1], e);
+    else merged.push([s, e]);
+  }
+  return merged;
+}
+
+function highlightText(
+  text: string,
+  terms: string[],
+  keyPrefix: string,
+  boldFontFamily = 'Lora_700Bold'
+): (string | React.ReactElement)[] {
+  if (!terms.length) return [text];
+  const { normalized, chars } = normalizeForHighlight(text);
+  const ranges = findHighlightRanges(normalized, terms);
+  if (!ranges.length) return [text];
+  const out: (string | React.ReactElement)[] = [];
+  let cursor = 0;
+  ranges.forEach(([s, e], idx) => {
+    if (s > cursor) out.push(chars.slice(cursor, s).join(''));
+    out.push(<Text key={`${keyPrefix}-${idx}`} style={{ fontFamily: boldFontFamily }}>{chars.slice(s, e).join('')}</Text>);
+    cursor = e;
+  });
+  if (cursor < chars.length) out.push(chars.slice(cursor).join(''));
+  return out;
+}
+
+function renderInline(
+  text: string,
+  onNt: ((word: string, note: string) => void) | undefined,
+  highlightTerms: string[],
+  styles: ReturnType<typeof createStyles>
+): (string | React.ReactElement)[] {
+  const parts = text.split(/(\*\*_[^_]+_\*\*|\*\*[^*]+\*\*|_[^_]+_|\{NT:[^}]+\})/);
+  return parts.flatMap((part, i) => {
+    if (part.startsWith('**_') && part.endsWith('_**')) {
+      return <Text key={i} style={{ fontFamily: 'Lora_700Bold_Italic' }}>{part.slice(3, -3)}</Text>;
+    }
+    if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
+      return <Text key={i} style={{ fontFamily: 'Lora_700Bold' }}>{part.slice(2, -2)}</Text>;
+    }
+    if (part.startsWith('_') && part.endsWith('_') && part.length > 2) {
+      return <Text key={i} style={styles.italic}>{part.slice(1, -1)}</Text>;
+    }
+    if (part.startsWith('{NT:') && part.endsWith('}')) {
+      const word = part.slice(4, -1);
+      const note = NT_NOTES[word.toLowerCase()];
+      return (
+        <Text key={i} style={styles.ntWord} onPress={note && onNt ? () => onNt(word, note) : undefined}>
+          {word}
+        </Text>
+      );
+    }
+    return highlightText(part, highlightTerms, `hl-${i}`);
+  });
+}
+
+// Each block (paragraph/stanza/heading) is its own memoized component so a
+// verse tap (which changes `selectedMask` for exactly one block) only
+// re-renders that block, not the whole chapter. This only works because
+// every prop below is either a primitive or a reference that's stable
+// across re-renders (see the call site in ReaderScreen) — passing the raw
+// `selectedVerses` Set or an inline `() => ...` callback here would give
+// every block a "changed" prop on every tap and defeat the memoization.
+type ReaderBlockProps = {
+  block: ContentBlock;
+  blockKey: number;
+  mt: number;
+  numbered: boolean;
+  styles: ReturnType<typeof createStyles>;
+  bookId: string;
+  isScrollTarget: boolean;
+  rootChapterAnchor: string | null;
+  versesParam?: string;
+  highlightTerms: string[];
+  selectedMask: string;
+  savedVerseMap: Map<string, SavedBookmark>;
+  handleVersePress: (verseKey: string) => void;
+  handleVerseLongPress: (verseKey: string) => void;
+  openNtSheet: (word: string, note: string) => void;
+  handleAnchorLayout: (e: LayoutChangeEvent, scrollToTop?: boolean, verseFraction?: number | null) => void;
+  recordChapterLayout: (block: ContentBlock, e: LayoutChangeEvent) => void;
+  recordSectionLayout: (block: ContentBlock, e: LayoutChangeEvent) => void;
+  recordVerseBlockLayout: (blockKey: number, e: LayoutChangeEvent) => void;
+};
+
+const ReaderBlock = React.memo(function ReaderBlock({
+  block, blockKey, mt, numbered, styles, bookId, isScrollTarget, rootChapterAnchor,
+  versesParam, highlightTerms, selectedMask, savedVerseMap,
+  handleVersePress, handleVerseLongPress, openNtSheet, handleAnchorLayout,
+  recordChapterLayout, recordSectionLayout, recordVerseBlockLayout,
+}: ReaderBlockProps) {
+  const key = blockKey;
+  // Landing on a saved bookmark: estimate where the first saved verse
+  // falls within this paragraph (by sentence position) so the scroll
+  // can keep it within the top half of the screen even if it isn't
+  // the paragraph's first sentence.
+  const onLayout = isScrollTarget
+    ? (e: LayoutChangeEvent) => {
+        let verseFraction: number | null = null;
+        if (versesParam && block.sentences?.length) {
+          const firstSavedVerse = Math.min(...versesParam.split(',').map(Number));
+          const idx = block.sentences.findIndex(s => s.verse === firstSavedVerse);
+          if (idx >= 0) verseFraction = idx / block.sentences.length;
+        }
+        handleAnchorLayout(e, false, verseFraction);
+      }
+    : undefined;
+  switch (block.type) {
+
+    case 'book-heading':
+      return (
+        <Text key={key} selectable={nativeTextSelectable} style={[styles.bookHeading, { marginTop: mt }]} onLayout={onLayout}>
+          {block.title}
+        </Text>
+      );
+
+    case 'part-heading':
+      return (
+        <Text key={key} selectable={nativeTextSelectable} style={[styles.partHeading, { marginTop: mt }]} onLayout={onLayout}>
+          {block.title}
+        </Text>
+      );
+
+    case 'chapter-heading': {
+      const chapterLayout = (e: LayoutChangeEvent) => {
+        recordChapterLayout(block, e);
+        if (isScrollTarget) handleAnchorLayout(e, block.anchor === rootChapterAnchor);
+      };
+      const isSetIntro = /^workbook-part2-set\d+-intro$/.test(block.anchor ?? '');
+      const fmt = (s: string) => bookId === 'mft' ? s : toTitleCase(s);
+      return (
+        <View key={key} style={{ marginTop: mt }} onLayout={chapterLayout}>
+          {block.subtitle ? (
+            <>
+              <Text selectable={nativeTextSelectable} style={styles.chapterNumber}>{fmt(block.title ?? '')}</Text>
+              <Text selectable={nativeTextSelectable} style={[styles.chapterHeading, { marginTop: Spacing[4] }]}>{fmt(block.subtitle ?? '')}</Text>
+            </>
+          ) : (
+            <Text selectable={nativeTextSelectable} style={isSetIntro ? styles.chapterNumber : styles.chapterHeading}>{fmt(block.title ?? '')}</Text>
+          )}
+        </View>
+      );
+    }
+
+    case 'section-heading': {
+      const sectionLayout = (e: LayoutChangeEvent) => {
+        recordSectionLayout(block, e);
+        if (isScrollTarget) handleAnchorLayout(e);
+      };
+      return (
+        <Text key={key} selectable={nativeTextSelectable} style={[styles.sectionHeading, { marginTop: mt }]} onLayout={sectionLayout}>
+          {block.title}
+        </Text>
+      );
+    }
+
+    case 'lesson-group-heading':
+      return (
+        <Text key={key} selectable={nativeTextSelectable} style={[styles.lessonTitle, { marginTop: mt }]} onLayout={isScrollTarget ? (e) => handleAnchorLayout(e, true) : undefined}>
+          {block.title}
+        </Text>
+      );
+
+    case 'lesson-set-heading': {
+      const setLayout = (e: LayoutChangeEvent) => {
+        recordChapterLayout(block, e);
+        if (isScrollTarget) handleAnchorLayout(e, true);
+      };
+      if (block.anchor === 'workbook-part2-final') {
+        return (
+          <Text key={key} selectable={nativeTextSelectable} style={[styles.lessonTitle, { marginTop: mt }]} onLayout={setLayout}>
+            {block.subtitle}
+          </Text>
+        );
+      }
+      return (
+        <View key={key} style={{ marginTop: mt }} onLayout={setLayout}>
+          <Text selectable={nativeTextSelectable} style={styles.lessonSetSubtitle}>{block.subtitle}</Text>
+        </View>
+      );
+    }
+
+    case 'lesson-heading': {
+      const lessonLayout = (e: LayoutChangeEvent) => {
+        recordChapterLayout(block, e);
+        if (isScrollTarget) handleAnchorLayout(e);
+      };
+      return (
+        <View key={key} style={{ marginTop: mt }} onLayout={lessonLayout}>
+          <Text selectable={nativeTextSelectable} style={styles.lessonTitle}>{block.title}</Text>
+          {block.subtitle && (
+            <Text selectable={nativeTextSelectable} style={[styles.lessonSubtitle, { marginTop: Spacing[4] }]}>{block.subtitle}</Text>
+          )}
+        </View>
+      );
+    }
+
+    case 'stanza': {
+      const stSentences = block.sentences ?? [];
+      const stHasLineBreaks = stSentences.some(s => s.newline);
+      const stFont = (s: Sentence) =>
+        s.bold && !s.italic ? 'Lora_700Bold' :
+        s.bold &&  s.italic ? 'Lora_700Bold_Italic' :
+                              'Lora_400Regular_Italic';
+      const stanzaHighlightTerms = isScrollTarget ? highlightTerms : NO_HIGHLIGHT_TERMS;
+      const stanzaBlockLayout = (e: LayoutChangeEvent) => {
+        recordVerseBlockLayout(key, e);
+        onLayout?.(e);
+      };
+      if (stHasLineBreaks) {
+        return (
+          <View key={key} style={[styles.stanzaBlock, { marginTop: mt }]} onLayout={stanzaBlockLayout}>
+            {stSentences.map((s, si) => {
+              const verseKey = `${key}:${si}`;
+              const selected = selectedMask.charAt(si) === '1';
+              const saved = savedVerseMap.has(verseKey);
+              return (
+                <Text
+                  key={si}
+                  selectable={nativeTextSelectable}
+                  onPress={() => handleVersePress(verseKey)}
+                  onLongPress={() => handleVerseLongPress(verseKey)}
+                  style={[
+                    styles.bodyLarge,
+                    { fontFamily: stFont(s) },
+                    s.spaceBefore && si > 0 && { marginTop: Spacing[20] },
+                    saved && styles.verseSaved,
+                    selected && styles.verseSelected,
+                  ]}
+                >
+                  {s.verse !== 1 && s.verse !== stSentences[si - 1]?.verse && toSuperscript(s.verse)}
+                  {renderInline(s.content, openNtSheet, stanzaHighlightTerms, styles)}
+                </Text>
+              );
+            })}
+          </View>
+        );
+      }
+      return (
+        <Text key={key} selectable={nativeTextSelectable} style={[styles.bodyLarge, styles.stanzaBlock, { marginTop: mt }]} onLayout={stanzaBlockLayout}>
+          {stSentences.map((s, si) => {
+            const verseKey = `${key}:${si}`;
+            const selected = selectedMask.charAt(si) === '1';
+            const saved = savedVerseMap.has(verseKey);
+            return (
+              <Text key={si} onPress={() => handleVersePress(verseKey)} onLongPress={() => handleVerseLongPress(verseKey)} style={[{ fontFamily: stFont(s) }, saved && styles.verseSaved, selected && styles.verseSelected]}>
+                {s.verse !== 1 && s.verse !== stSentences[si - 1]?.verse && toSuperscript(s.verse)}
+                {renderInline(s.content, openNtSheet, stanzaHighlightTerms, styles)}
+                {si < stSentences.length - 1 ? ' ' : ''}
+              </Text>
+            );
+          })}
+        </Text>
+      );
+    }
+
+    case 'text': {
+      const sentences = block.sentences ?? [];
+      const hasLineBreaks = sentences.some(s => s.newline);
+      const textHighlightTerms = isScrollTarget ? highlightTerms : NO_HIGHLIGHT_TERMS;
+      const textBlockLayout = (e: LayoutChangeEvent) => {
+        recordVerseBlockLayout(key, e);
+        onLayout?.(e);
+      };
+      if (hasLineBreaks) {
+        // Each sentence gets its own line UNLESS inline:true, which attaches it to the previous line
+        const lines: { sentences: { s: Sentence; oi: number }[]; spaceBefore: boolean }[] = [];
+        sentences.forEach((s, oi) => {
+          if (s.inline && lines.length > 0) {
+            lines[lines.length - 1].sentences.push({ s, oi });
+          } else {
+            lines.push({ sentences: [{ s, oi }], spaceBefore: !!s.spaceBefore });
+          }
+        });
+        return (
+          <View key={key} style={{ marginTop: mt }} onLayout={textBlockLayout}>
+            {lines.map((line, li) => (
+              <Text key={li} selectable={nativeTextSelectable} style={[
+                styles.bodyLarge,
+                line.spaceBefore && { marginTop: Spacing[20] },
+              ]}>
+                {li === 0 && numbered && block.paragraph != null && <Text style={styles.bodyLarge}>{block.paragraph}.{'  '}</Text>}
+                {line.sentences.map(({ s, oi }, si) => {
+                  const verseKey = `${key}:${oi}`;
+                  const selected = selectedMask.charAt(oi) === '1';
+                  const saved = savedVerseMap.has(verseKey);
+                  return (
+                    <Text
+                      key={si}
+                      onPress={() => handleVersePress(verseKey)}
+                      onLongPress={() => handleVerseLongPress(verseKey)}
+                      style={[
+                        s.bold && s.italic  ? { fontFamily: 'Lora_700Bold_Italic' } : undefined,
+                        s.bold && !s.italic ? { fontFamily: 'Lora_700Bold' } : undefined,
+                        !s.bold && s.italic ? { fontFamily: 'Lora_400Regular_Italic' } : undefined,
+                        saved && styles.verseSaved,
+                        selected && styles.verseSelected,
+                      ]}
+                    >
+                      {s.verse !== 1 && s.verse !== line.sentences[si - 1]?.s.verse && toSuperscript(s.verse)}
+                      {s.italic
+                        ? highlightText(s.content, textHighlightTerms, `it-${si}`, 'Lora_700Bold_Italic')
+                        : renderInline(s.content, openNtSheet, textHighlightTerms, styles)}
+                      {si < line.sentences.length - 1 ? ' ' : ''}
+                    </Text>
+                  );
+                })}
+              </Text>
+            ))}
+          </View>
+        );
+      }
+      return (
+        <Text key={key} selectable={nativeTextSelectable} style={[styles.bodyLarge, { marginTop: mt }, block.indent && styles.stanzaBlock, block.center && { textAlign: 'center' }]} onLayout={textBlockLayout}>
+          {numbered && block.paragraph != null && `${block.paragraph}.  `}
+          {sentences.map((s, si) => {
+            const verseKey = `${key}:${si}`;
+            const selected = selectedMask.charAt(si) === '1';
+            const saved = savedVerseMap.has(verseKey);
+            return (
+              <Text
+                key={si}
+                onPress={() => handleVersePress(verseKey)}
+                onLongPress={() => handleVerseLongPress(verseKey)}
+                style={[
+                  s.bold && s.italic  ? { fontFamily: 'Lora_700Bold_Italic' } : undefined,
+                  s.bold && !s.italic ? { fontFamily: 'Lora_700Bold' } : undefined,
+                  !s.bold && s.italic ? styles.italic : undefined,
+                  saved && styles.verseSaved,
+                  selected && styles.verseSelected,
+                ]}
+              >
+                {s.verse !== 1 && s.verse !== sentences[si - 1]?.verse && toSuperscript(s.verse)}
+                {s.italic
+                  ? highlightText(s.content, textHighlightTerms, `it-${si}`, 'Lora_700Bold_Italic')
+                  : renderInline(s.content, openNtSheet, textHighlightTerms, styles)}
+                {si < sentences.length - 1 ? ' ' : ''}
+              </Text>
+            );
+          })}
+        </Text>
+      );
+    }
+
+    default:
+      return null;
+  }
+});
 
 export default function ReaderScreen() {
   const { book: bookId, anchor, paragraph: paragraphParam, q: searchQuery, verses: versesParam, chain: chainParam } = useLocalSearchParams<{ book: string; anchor: string; paragraph?: string; q?: string; verses?: string; chain?: string }>();
@@ -644,132 +1063,6 @@ export default function ReaderScreen() {
     }
   }, [screenHeight, closeDrawer]);
 
-
-
-const SUPERSCRIPT: Record<string, string> = {
-  '0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹',
-};
-const SUPERSCRIPT_ALPHA: Record<string, string> = {
-  'a':'ᵃ','b':'ᵇ','c':'ᶜ','d':'ᵈ','e':'ᵉ','f':'ᶠ','g':'ᵍ','h':'ʰ',
-  'i':'ⁱ','j':'ʲ','k':'ᵏ','l':'ˡ','m':'ᵐ','n':'ⁿ','o':'ᵒ','p':'ᵖ',
-  'r':'ʳ','s':'ˢ','t':'ᵗ','u':'ᵘ','v':'ᵛ','w':'ʷ','x':'ˣ','y':'ʸ','z':'ᶻ',
-};
-function toSuperscript(n: number | string): string {
-  if (typeof n === 'string') return SUPERSCRIPT_ALPHA[n] ?? n;
-  return String(n).split('').map(d => SUPERSCRIPT[d]).join('');
-}
-
-const NT_NOTES: Record<string, string> = {
-  unicidad: 'A la palabra "unicidad", que de acuerdo con el Diccionario de la Real Academia Española significa "calidad de único", se le ha dado aquí un nuevo significado. En la presente obra se ha utilizado "unicidad" exclusivamente para traducir la palabra inglesa "oneness" en su acepción de: "calidad, estado o hecho de ser uno".',
-  impecables: 'La palabra "impecable" no tiene aquí el significado más usual de "intachable, irreprochable", sino el más literal de "sin pecado".',
-  impecablemente: 'La palabra "impecable" no tiene aquí el significado más usual de "intachable, irreprochable", sino el más literal de "sin pecado".',
-  impecabilidad: 'La palabra "impecable" no tiene aquí el significado más usual de "intachable, irreprochable", sino el más literal de "sin pecado".',
-  impecable: 'La palabra "impecable" no tiene aquí el significado más usual de "intachable, irreprochable", sino el más literal de "sin pecado".',
-  especialismo: 'Se ha utilizado "especialismo" para traducir el término inglés "specialness", cuyo significado es "la calidad, condición, estado o deseo de ser especial".',
-};
-
-function extractSectionLabel(title: string): string {
-  const m = title.match(/^([IVX]+|[A-Z]|[0-9]+)\./);
-  if (!m) return '';
-  return `Secc. ${m[1].toUpperCase()}`;
-}
-
-// Builds a case/accent-folded copy of `text` where each entry lines up 1:1
-// with `chars` (text split by code point), so match ranges found in the
-// normalized string can be sliced straight back out of the original.
-function normalizeForHighlight(text: string): { normalized: string; chars: string[] } {
-  const chars = Array.from(text);
-  const normalized = chars
-    .map((ch) => {
-      const stripped = ch.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      return (stripped[0] ?? ch).toLowerCase();
-    })
-    .join('');
-  return { normalized, chars };
-}
-
-function isWordChar(ch: string | undefined): boolean {
-  return !!ch && /[\p{L}\p{N}]/u.test(ch);
-}
-
-// Finds whole-word matches for each (already-normalized) term, mirroring
-// FTS5's prefix-match semantics: a term matches any word that *starts* with
-// it, and the whole word gets highlighted — not just the typed prefix.
-function findHighlightRanges(normalized: string, terms: string[]): [number, number][] {
-  const ranges: [number, number][] = [];
-  for (const term of terms) {
-    if (!term) continue;
-    let from = 0;
-    let idx: number;
-    while ((idx = normalized.indexOf(term, from)) !== -1) {
-      from = idx + 1;
-      if (isWordChar(normalized[idx - 1])) continue; // mid-word, not a token start
-      let end = idx + term.length;
-      while (isWordChar(normalized[end])) end++;
-      ranges.push([idx, end]);
-    }
-  }
-  if (!ranges.length) return ranges;
-  ranges.sort((a, b) => a[0] - b[0]);
-  const merged: [number, number][] = [ranges[0]];
-  for (const [s, e] of ranges.slice(1)) {
-    const last = merged[merged.length - 1];
-    if (s <= last[1]) last[1] = Math.max(last[1], e);
-    else merged.push([s, e]);
-  }
-  return merged;
-}
-
-function highlightText(
-  text: string,
-  terms: string[],
-  keyPrefix: string,
-  boldFontFamily = 'Lora_700Bold'
-): (string | React.ReactElement)[] {
-  if (!terms.length) return [text];
-  const { normalized, chars } = normalizeForHighlight(text);
-  const ranges = findHighlightRanges(normalized, terms);
-  if (!ranges.length) return [text];
-  const out: (string | React.ReactElement)[] = [];
-  let cursor = 0;
-  ranges.forEach(([s, e], idx) => {
-    if (s > cursor) out.push(chars.slice(cursor, s).join(''));
-    out.push(<Text key={`${keyPrefix}-${idx}`} style={{ fontFamily: boldFontFamily }}>{chars.slice(s, e).join('')}</Text>);
-    cursor = e;
-  });
-  if (cursor < chars.length) out.push(chars.slice(cursor).join(''));
-  return out;
-}
-
-function renderInline(
-  text: string,
-  onNt?: (word: string, note: string) => void,
-  highlightTerms: string[] = NO_HIGHLIGHT_TERMS
-): (string | React.ReactElement)[] {
-  const parts = text.split(/(\*\*_[^_]+_\*\*|\*\*[^*]+\*\*|_[^_]+_|\{NT:[^}]+\})/);
-  return parts.flatMap((part, i) => {
-    if (part.startsWith('**_') && part.endsWith('_**')) {
-      return <Text key={i} style={{ fontFamily: 'Lora_700Bold_Italic' }}>{part.slice(3, -3)}</Text>;
-    }
-    if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
-      return <Text key={i} style={{ fontFamily: 'Lora_700Bold' }}>{part.slice(2, -2)}</Text>;
-    }
-    if (part.startsWith('_') && part.endsWith('_') && part.length > 2) {
-      return <Text key={i} style={styles.italic}>{part.slice(1, -1)}</Text>;
-    }
-    if (part.startsWith('{NT:') && part.endsWith('}')) {
-      const word = part.slice(4, -1);
-      const note = NT_NOTES[word.toLowerCase()];
-      return (
-        <Text key={i} style={styles.ntWord} onPress={note && onNt ? () => onNt(word, note) : undefined}>
-          {word}
-        </Text>
-      );
-    }
-    return highlightText(part, highlightTerms, `hl-${i}`);
-  });
-}
-
   const bookBlocks = useMemo(() => {
     const key = resolveContentKey(bookId, anchor);
     return (CONTENT[key] ?? []) as ContentBlock[];
@@ -841,14 +1134,33 @@ function renderInline(
     return map;
   }, [bookmarks, bookBlocks, bookId]);
 
-  // A saved verse opens its note sheet on tap rather than joining the live
-  // selection — the two interactions (viewing vs. selecting-to-act-on) would
-  // otherwise be indistinguishable from the same tap.
+  // A saved verse opens its note sheet on tap — UNLESS the user is already
+  // mid-selection (selectedVersesRef non-empty), in which case a saved verse
+  // behaves like any other verse and joins/leaves the active selection
+  // instead. This lets a selection mix saved and unsaved verses for a
+  // combined share, without interrupting an in-progress selection every time
+  // it happens to touch an already-saved one.
   const handleVersePress = useCallback((verseKey: string) => {
     const bookmark = savedVerseMap.get(verseKey);
-    if (bookmark) openSavedNoteSheet(bookmark);
+    if (bookmark && selectedVersesRef.current.size === 0) openSavedNoteSheet(bookmark);
     else toggleVerse(verseKey);
   }, [savedVerseMap, openSavedNoteSheet, toggleVerse]);
+
+  // Long-pressing a saved verse starts a brand-new selection containing just
+  // that verse (discarding whatever was previously selected) — the only way
+  // to begin a selection when every verse you want is already individually
+  // saved, since a plain tap on those opens their note sheet instead. Only
+  // meaningful for already-saved verses; unsaved ones already select on a
+  // plain tap.
+  const handleVerseLongPress = useCallback((verseKey: string) => {
+    if (!savedVerseMap.has(verseKey)) return;
+    const next = new Set([verseKey]);
+    selectedVersesRef.current = next;
+    setSelectedVerses(next);
+    setDrawerMode('toolbar');
+    setNoteText('');
+    openDrawer();
+  }, [savedVerseMap, openDrawer]);
 
   useEffect(() => {
     setScrolledChapterBlock(null);
@@ -892,6 +1204,18 @@ function renderInline(
     }
     return last;
   }, [bookBlocks, anchor, scrolledSectionBlock]);
+
+  // Review trigger #2: the user reaches Theory Ch.1 §II ("La revelación, el
+  // tiempo y los milagros", anchor theory-ch1-s2) — fires whether they land
+  // here directly (a link/index tap) or scroll into it while reading, since
+  // navSectionBlock already tracks "the section currently in view" either
+  // way. See also: app/_layout.tsx's 15-minute trigger (#1) — whichever
+  // fires first wins, since requestAppReview() no-ops after the first call.
+  useEffect(() => {
+    if (bookId === 'theory' && navSectionBlock?.anchor === 'theory-ch1-s2') {
+      requestAppReview();
+    }
+  }, [bookId, navSectionBlock]);
 
   // Resolves the current verse selection into a citation ("T-26.IV.4:7") and
   // the section-level anchor/paragraph the bookmark should reopen at — reuses
@@ -1330,260 +1654,30 @@ function renderInline(
         contentContainerStyle={[styles.content, { paddingTop: navBarHeight }]}
         onScroll={handleScroll}
       >
-        {visibleBlocks.map(({ block, mt, key, numbered }) => {
-          // Landing on a saved bookmark: estimate where the first saved verse
-          // falls within this paragraph (by sentence position) so the scroll
-          // can keep it within the top half of the screen even if it isn't
-          // the paragraph's first sentence.
-          const onLayout = block === scrollTargetBlock
-            ? (e: LayoutChangeEvent) => {
-                let verseFraction: number | null = null;
-                if (versesParam && block.sentences?.length) {
-                  const firstSavedVerse = Math.min(...versesParam.split(',').map(Number));
-                  const idx = block.sentences.findIndex(s => s.verse === firstSavedVerse);
-                  if (idx >= 0) verseFraction = idx / block.sentences.length;
-                }
-                handleAnchorLayout(e, false, verseFraction);
-              }
-            : undefined;
-          switch (block.type) {
-
-            case 'book-heading':
-              return (
-                <Text key={key} selectable={nativeTextSelectable} style={[styles.bookHeading, { marginTop: mt }]} onLayout={onLayout}>
-                  {block.title}
-                </Text>
-              );
-
-            case 'part-heading':
-              return (
-                <Text key={key} selectable={nativeTextSelectable} style={[styles.partHeading, { marginTop: mt }]} onLayout={onLayout}>
-                  {block.title}
-                </Text>
-              );
-
-            case 'chapter-heading': {
-              const chapterLayout = (e: LayoutChangeEvent) => {
-                recordChapterLayout(block, e);
-                if (block === scrollTargetBlock) handleAnchorLayout(e, block.anchor === rootChapterAnchor);
-              };
-              const isSetIntro = /^workbook-part2-set\d+-intro$/.test(block.anchor ?? '');
-              const fmt = (s: string) => bookId === 'mft' ? s : toTitleCase(s);
-              return (
-                <View key={key} style={{ marginTop: mt }} onLayout={chapterLayout}>
-                  {block.subtitle ? (
-                    <>
-                      <Text selectable={nativeTextSelectable} style={styles.chapterNumber}>{fmt(block.title ?? '')}</Text>
-                      <Text selectable={nativeTextSelectable} style={[styles.chapterHeading, { marginTop: Spacing[4] }]}>{fmt(block.subtitle ?? '')}</Text>
-                    </>
-                  ) : (
-                    <Text selectable={nativeTextSelectable} style={isSetIntro ? styles.chapterNumber : styles.chapterHeading}>{fmt(block.title ?? '')}</Text>
-                  )}
-                </View>
-              );
-            }
-
-            case 'section-heading': {
-              const sectionLayout = (e: LayoutChangeEvent) => {
-                recordSectionLayout(block, e);
-                if (block === scrollTargetBlock) handleAnchorLayout(e);
-              };
-              return (
-                <Text key={key} selectable={nativeTextSelectable} style={[styles.sectionHeading, { marginTop: mt }]} onLayout={sectionLayout}>
-                  {block.title}
-                </Text>
-              );
-            }
-
-            case 'lesson-group-heading':
-              return (
-                <Text key={key} selectable={nativeTextSelectable} style={[styles.lessonTitle, { marginTop: mt }]} onLayout={block === scrollTargetBlock ? (e) => handleAnchorLayout(e, true) : undefined}>
-                  {block.title}
-                </Text>
-              );
-
-            case 'lesson-set-heading': {
-              const setLayout = (e: LayoutChangeEvent) => {
-                recordChapterLayout(block, e);
-                if (block === scrollTargetBlock) handleAnchorLayout(e, true);
-              };
-              if (block.anchor === 'workbook-part2-final') {
-                return (
-                  <Text key={key} selectable={nativeTextSelectable} style={[styles.lessonTitle, { marginTop: mt }]} onLayout={setLayout}>
-                    {block.subtitle}
-                  </Text>
-                );
-              }
-              return (
-                <View key={key} style={{ marginTop: mt }} onLayout={setLayout}>
-                  <Text selectable={nativeTextSelectable} style={styles.lessonSetSubtitle}>{block.subtitle}</Text>
-                </View>
-              );
-            }
-
-            case 'lesson-heading': {
-              const lessonLayout = (e: LayoutChangeEvent) => {
-                recordChapterLayout(block, e);
-                if (block === scrollTargetBlock) handleAnchorLayout(e);
-              };
-              return (
-                <View key={key} style={{ marginTop: mt }} onLayout={lessonLayout}>
-                  <Text selectable={nativeTextSelectable} style={styles.lessonTitle}>{block.title}</Text>
-                  {block.subtitle && (
-                    <Text selectable={nativeTextSelectable} style={[styles.lessonSubtitle, { marginTop: Spacing[4] }]}>{block.subtitle}</Text>
-                  )}
-                </View>
-              );
-            }
-
-            case 'stanza': {
-              const stSentences = block.sentences ?? [];
-              const stHasLineBreaks = stSentences.some(s => s.newline);
-              const stFont = (s: Sentence) =>
-                s.bold && !s.italic ? 'Lora_700Bold' :
-                s.bold &&  s.italic ? 'Lora_700Bold_Italic' :
-                                      'Lora_400Regular_Italic';
-              const stanzaHighlightTerms = block === scrollTargetBlock ? highlightTerms : NO_HIGHLIGHT_TERMS;
-              const stanzaBlockLayout = (e: LayoutChangeEvent) => {
-                recordVerseBlockLayout(key, e);
-                onLayout?.(e);
-              };
-              if (stHasLineBreaks) {
-                return (
-                  <View key={key} style={[styles.stanzaBlock, { marginTop: mt }]} onLayout={stanzaBlockLayout}>
-                    {stSentences.map((s, si) => {
-                      const verseKey = `${key}:${si}`;
-                      const selected = selectedVerses.has(verseKey);
-                      const saved = savedVerseMap.has(verseKey);
-                      return (
-                        <Text
-                          key={si}
-                          selectable={nativeTextSelectable}
-                          onPress={() => handleVersePress(verseKey)}
-                          style={[
-                            styles.bodyLarge,
-                            { fontFamily: stFont(s) },
-                            s.spaceBefore && si > 0 && { marginTop: Spacing[20] },
-                            saved && styles.verseSaved,
-                            selected && styles.verseSelected,
-                          ]}
-                        >
-                          {s.verse !== 1 && toSuperscript(s.verse)}
-                          {renderInline(s.content, openNtSheet, stanzaHighlightTerms)}
-                        </Text>
-                      );
-                    })}
-                  </View>
-                );
-              }
-              return (
-                <Text key={key} selectable={nativeTextSelectable} style={[styles.bodyLarge, styles.stanzaBlock, { marginTop: mt }]} onLayout={stanzaBlockLayout}>
-                  {stSentences.map((s, si) => {
-                    const verseKey = `${key}:${si}`;
-                    const selected = selectedVerses.has(verseKey);
-                    const saved = savedVerseMap.has(verseKey);
-                    return (
-                      <Text key={si} onPress={() => handleVersePress(verseKey)} style={[{ fontFamily: stFont(s) }, saved && styles.verseSaved, selected && styles.verseSelected]}>
-                        {s.verse !== 1 && toSuperscript(s.verse)}
-                        {renderInline(s.content, openNtSheet, stanzaHighlightTerms)}
-                        {si < stSentences.length - 1 ? ' ' : ''}
-                      </Text>
-                    );
-                  })}
-                </Text>
-              );
-            }
-
-            case 'text': {
-              const sentences = block.sentences ?? [];
-              const hasLineBreaks = sentences.some(s => s.newline);
-              const textHighlightTerms = block === scrollTargetBlock ? highlightTerms : NO_HIGHLIGHT_TERMS;
-              const textBlockLayout = (e: LayoutChangeEvent) => {
-                recordVerseBlockLayout(key, e);
-                onLayout?.(e);
-              };
-              if (hasLineBreaks) {
-                // Each sentence gets its own line UNLESS inline:true, which attaches it to the previous line
-                const lines: { sentences: { s: Sentence; oi: number }[]; spaceBefore: boolean }[] = [];
-                sentences.forEach((s, oi) => {
-                  if (s.inline && lines.length > 0) {
-                    lines[lines.length - 1].sentences.push({ s, oi });
-                  } else {
-                    lines.push({ sentences: [{ s, oi }], spaceBefore: !!s.spaceBefore });
-                  }
-                });
-                return (
-                  <View key={key} style={{ marginTop: mt }} onLayout={textBlockLayout}>
-                    {lines.map((line, li) => (
-                      <Text key={li} selectable={nativeTextSelectable} style={[
-                        styles.bodyLarge,
-                        line.spaceBefore && { marginTop: Spacing[20] },
-                      ]}>
-                        {li === 0 && numbered && block.paragraph != null && <Text style={styles.bodyLarge}>{block.paragraph}.{'  '}</Text>}
-                        {line.sentences.map(({ s, oi }, si) => {
-                          const verseKey = `${key}:${oi}`;
-                          const selected = selectedVerses.has(verseKey);
-                          const saved = savedVerseMap.has(verseKey);
-                          return (
-                            <Text
-                              key={si}
-                              onPress={() => handleVersePress(verseKey)}
-                              style={[
-                                s.bold && s.italic  ? { fontFamily: 'Lora_700Bold_Italic' } : undefined,
-                                s.bold && !s.italic ? { fontFamily: 'Lora_700Bold' } : undefined,
-                                !s.bold && s.italic ? { fontFamily: 'Lora_400Regular_Italic' } : undefined,
-                                saved && styles.verseSaved,
-                                selected && styles.verseSelected,
-                              ]}
-                            >
-                              {s.verse !== 1 && toSuperscript(s.verse)}
-                              {s.italic
-                                ? highlightText(s.content, textHighlightTerms, `it-${si}`, 'Lora_700Bold_Italic')
-                                : renderInline(s.content, openNtSheet, textHighlightTerms)}
-                              {si < line.sentences.length - 1 ? ' ' : ''}
-                            </Text>
-                          );
-                        })}
-                      </Text>
-                    ))}
-                  </View>
-                );
-              }
-              return (
-                <Text key={key} selectable={nativeTextSelectable} style={[styles.bodyLarge, { marginTop: mt }, block.indent && styles.stanzaBlock, block.center && { textAlign: 'center' }]} onLayout={textBlockLayout}>
-                  {numbered && block.paragraph != null && `${block.paragraph}.  `}
-                  {sentences.map((s, si) => {
-                    const verseKey = `${key}:${si}`;
-                    const selected = selectedVerses.has(verseKey);
-                    const saved = savedVerseMap.has(verseKey);
-                    return (
-                      <Text
-                        key={si}
-                        onPress={() => handleVersePress(verseKey)}
-                        style={[
-                          s.bold && s.italic  ? { fontFamily: 'Lora_700Bold_Italic' } : undefined,
-                          s.bold && !s.italic ? { fontFamily: 'Lora_700Bold' } : undefined,
-                          !s.bold && s.italic ? styles.italic : undefined,
-                          saved && styles.verseSaved,
-                          selected && styles.verseSelected,
-                        ]}
-                      >
-                        {s.verse !== 1 && toSuperscript(s.verse)}
-                        {s.italic
-                          ? highlightText(s.content, textHighlightTerms, `it-${si}`, 'Lora_700Bold_Italic')
-                          : renderInline(s.content, openNtSheet, textHighlightTerms)}
-                        {si < sentences.length - 1 ? ' ' : ''}
-                      </Text>
-                    );
-                  })}
-                </Text>
-              );
-            }
-
-            default:
-              return null;
-          }
-        })}
+        {visibleBlocks.map(({ block, mt, key, numbered }) => (
+          <ReaderBlock
+            key={key}
+            block={block}
+            blockKey={key}
+            mt={mt}
+            numbered={numbered}
+            styles={styles}
+            bookId={bookId}
+            isScrollTarget={block === scrollTargetBlock}
+            rootChapterAnchor={rootChapterAnchor}
+            versesParam={versesParam}
+            highlightTerms={highlightTerms}
+            selectedMask={(block.sentences ?? []).map((_, i) => (selectedVerses.has(`${key}:${i}`) ? '1' : '0')).join('')}
+            savedVerseMap={savedVerseMap}
+            handleVersePress={handleVersePress}
+            handleVerseLongPress={handleVerseLongPress}
+            openNtSheet={openNtSheet}
+            handleAnchorLayout={handleAnchorLayout}
+            recordChapterLayout={recordChapterLayout}
+            recordSectionLayout={recordSectionLayout}
+            recordVerseBlockLayout={recordVerseBlockLayout}
+          />
+        ))}
         {nextContentKey && (
           <View style={styles.nextChapterContainer}>
             <Button
