@@ -197,7 +197,7 @@ the dead-code list.
 **timestamp-based** timing (store start epoch, compute elapsed) so it survives backgrounding. Persist
 via a new `utils/timer.ts` + `acim_timer_*` key, mirroring `utils/lastRead.ts`'s get/set/clear shape.
 
-**Lesson reminders (local notifications).** Add `expo-notifications`; configure Android channel/icon/color
+**Lesson alarm system (push notifications).** Add `expo-notifications`; configure Android channel/icon/color
 + iOS permission via `app.json` plugins (following the existing local-plugin pattern). Local scheduled
 notifications only (offline, no server). New settings surface (`app/settings.tsx` route in `_layout.tsx`,
 or a reminders panel in the reader). Persist to `acim_reminders`; include an "enable all workbook
